@@ -189,15 +189,16 @@ function drawCaption(ctx, W, H, fmt, text, t) {
 }
 
 // ---------------------------------------------------------------- 클래식 타이틀 카드 (아이보리 종이, 골드 선, 작은 하트)
-let paper = null;
-function paperTexture(W, H) {
-  if (paper && paper.width === W && paper.height === H) return paper;
+const papers = new Map();
+function paperTexture(W, H, color = RULE.ivory) {
+  const key = W + 'x' + H + color;
+  if (papers.has(key)) return papers.get(key);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
-  g.fillStyle = RULE.ivory; g.fillRect(0, 0, W, H);
+  g.fillStyle = color; g.fillRect(0, 0, W, H);
   let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < W * H * 0.02; i++) { g.fillStyle = rnd() < .5 ? 'rgba(255,255,255,.25)' : 'rgba(120,105,85,.05)'; g.fillRect(rnd() * W, rnd() * H, 1, 1); }
-  paper = c; return c;
+  papers.set(key, c); return c;
 }
 const CLASSIC_TITLE_SEC = 3.6;
 function drawClassicTitle(ctx, W, H, fmt, text, t) {
@@ -232,6 +233,157 @@ function drawClassicTitle(ctx, W, H, fmt, text, t) {
   ctx.restore();
   resetFont(ctx);
 }
+
+// ---------------------------------------------------------------- 가을 테마 (단풍잎·은행잎 페이퍼컷, 크림 종이)
+const AUTUMN = {
+  paper: '#F4ECDF', ink: '#3B2F27', gold: '#B0894A', sub: '#8C7B6B',
+  maple: ['#B4492E', '#C4613A', '#A53F2C', '#CC7A40'],
+  ginkgo: ['#D6A63C', '#E0B754', '#C8972F'],
+  titleSec: 3.8, transSec: 1.4, transCut: 0.7,
+};
+const aRng = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const spriteCache = new Map();
+// 잎 하나를 256px 캔버스에 그려 둠 (가운데가 잎 중심, 반지름 약 100)
+function leafSprite(type, color) {
+  const key = type + color;
+  if (spriteCache.has(key)) return spriteCache.get(key);
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.translate(128, 128); g.scale(100, 100);
+  g.beginPath();
+  if (type === 'maple') {
+    const lobes = [[-90, 1], [-32, 0.88], [28, 0.62], [152, 0.62], [-148, 0.88]].map(([a, l]) => [a * Math.PI / 180, l]);
+    const pt = (a, r) => [Math.cos(a) * r, Math.sin(a) * r];
+    let first = true;
+    lobes.forEach(([a, l], i) => {
+      const [na] = lobes[(i + 1) % lobes.length];
+      let mid = (a + (na < a ? na + Math.PI * 2 : na)) / 2;
+      const deep = Math.abs(((mid * 180 / Math.PI) % 360) - 90) < 30 ? 0.22 : 0.34;   // 줄기 쪽은 더 깊게
+      const pts = [pt(a - 0.3, l * 0.6), pt(a - 0.16, l * 0.78), pt(a - 0.08, l * 0.72), pt(a, l), pt(a + 0.08, l * 0.72), pt(a + 0.16, l * 0.78), pt(a + 0.3, l * 0.6), pt(mid, deep)];
+      pts.forEach(([x, y]) => { if (first) { g.moveTo(x, y); first = false; } else g.lineTo(x, y); });
+    });
+    g.closePath();
+  } else {
+    // 은행잎: 부채꼴, 위 가운데가 살짝 갈라짐
+    const cy = 0.55, R = 1.05, a0 = -Math.PI / 2 - 0.95, a1 = -Math.PI / 2 + 0.95;
+    g.moveTo(0, cy - 0.05);
+    g.quadraticCurveTo(-0.25, cy - 0.35, Math.cos(a0) * R, cy + Math.sin(a0) * R);
+    g.arc(0, cy, R, a0, -Math.PI / 2 - 0.06);
+    g.lineTo(0, cy - R * 0.78);
+    g.lineTo(Math.cos(-Math.PI / 2 + 0.06) * R, cy + Math.sin(-Math.PI / 2 + 0.06) * R);
+    g.arc(0, cy, R, -Math.PI / 2 + 0.06, a1);
+    g.quadraticCurveTo(0.25, cy - 0.35, 0, cy - 0.05);
+    g.closePath();
+  }
+  g.save();
+  g.shadowColor = 'rgba(60,35,20,0.28)'; g.shadowBlur = 6 / 100 * 100; g.shadowOffsetY = 0.03;
+  g.fillStyle = color; g.fill();
+  g.restore();
+  g.save(); g.clip();
+  g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(-1.2, -1.2, 1.2, 2.4);   // 종이 한쪽 결
+  g.strokeStyle = 'rgba(255,240,215,0.35)'; g.lineWidth = 0.018;
+  if (type === 'maple') {
+    for (const a of [-90, -32, 28, 152, -148]) { const r = a * Math.PI / 180; g.beginPath(); g.moveTo(0, 0.1); g.lineTo(Math.cos(r) * 0.8, Math.sin(r) * 0.8); g.stroke(); }
+  } else {
+    for (let i = -6; i <= 6; i++) { const r = -Math.PI / 2 + i * 0.14; g.beginPath(); g.moveTo(0, 0.5); g.lineTo(Math.cos(r) * 1.0, 0.55 + Math.sin(r) * 1.0); g.stroke(); }
+  }
+  g.restore();
+  // 줄기
+  g.strokeStyle = color; g.lineWidth = 0.05; g.lineCap = 'round';
+  g.beginPath();
+  if (type === 'maple') { g.moveTo(0, 0.15); g.quadraticCurveTo(0.04, 0.5, 0.1, 0.78); }
+  else { g.moveTo(0, 0.5); g.quadraticCurveTo(0.03, 0.75, 0.08, 0.98); }
+  g.stroke();
+  spriteCache.set(key, c);
+  return c;
+}
+function drawLeaf(ctx, L, x, y, size, rot, alpha = 1) {
+  const sp = leafSprite(L.type, L.color);
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x, y); ctx.rotate(rot);
+  const s = size / 200; ctx.drawImage(sp, -128 * s, -128 * s, 256 * s, 256 * s);
+  ctx.restore();
+}
+function pickLeaf(r) {
+  const type = r() < 0.55 ? 'maple' : 'ginkgo';
+  const pal = AUTUMN[type];
+  return { type, color: pal[Math.floor(r() * pal.length)] };
+}
+// 바닥에 내려앉은 낙엽 배치 (화면 아래 가장자리, 일부는 화면 밖으로 잘림)
+function fallenLayout(W, H, seed, n, band) {
+  const r = aRng(seed), k = Math.min(W, H) / 1080, out = [];
+  for (let i = 0; i < n; i++) {
+    const L = pickLeaf(r);
+    const x = (i + 0.2 + r() * 0.6) / n * W;
+    out.push({ ...L, x, y: H - r() * band * k + 30 * k, size: (90 + r() * 70) * k, rot: (r() - 0.5) * 2.6, delay: 0.15 + r() * 0.7 });
+  }
+  return out;
+}
+const stepT = (t) => Math.floor(t * 12) / 12;     // 종이 인형처럼 12fps로 끊어 움직임
+function drawAutumnTitle(ctx, W, H, fmt, text, t) {
+  ctx.drawImage(paperTexture(W, H, AUTUMN.paper), 0, 0);
+  const vert = fmt === 'v', k = W / (vert ? 1080 : 1920) * (vert ? 1.15 : 1);
+  const ts = stepT(t);
+  // 바닥 낙엽: 위에서 툭 떨어져 자리 잡음
+  for (const L of fallenLayout(W, H, 11, vert ? 7 : 11, vert ? 120 : 90)) {
+    const p = clamp((ts - L.delay) / 0.35);
+    if (p <= 0) continue;
+    drawLeaf(ctx, L, L.x, L.y - (1 - easeOut(p)) * 60, L.size, L.rot + (1 - p) * 0.6, p);
+  }
+  // 위 오른쪽 구석에 작게 두 장
+  const r = aRng(5);
+  [[W - 70 * k, 40 * k], [W - 170 * k, -10 * k]].forEach(([x, y], i) => {
+    const p = clamp((ts - 0.5 - i * 0.15) / 0.3); if (p <= 0) return;
+    drawLeaf(ctx, pickLeaf(r), x, y, (95 - i * 15) * k, 2.4 + i, p);
+  });
+  // 천천히 떨어지는 한 장
+  const fall = (t % 3.8) / 3.8;
+  drawLeaf(ctx, { type: 'ginkgo', color: AUTUMN.ginkgo[1] }, W * ((vert ? 0.8 : 0.84) + Math.sin(fall * 6) * 0.03), -60 * k + fall * H * (vert ? 0.3 : 0.75), 70 * k, Math.sin(ts * 2) * 0.7, clamp(fall * 6) * (1 - clamp((fall - 0.85) * 7)));
+  // 글씨 (클래식과 같은 자리, 따뜻한 잉크색)
+  const cx = W / 2, yc = H * (vert ? 0.44 : 0.46);
+  const out = 1 - prog(t, AUTUMN.titleSec - 0.35, AUTUMN.titleSec);
+  ctx.save(); ctx.globalAlpha = out; ctx.textBaseline = 'alphabetic';
+  const lp = easeOut(prog(t, 0.25, 0.95)), half = 110 * k * lp, hy = yc - 118 * k;
+  if (lp > 0) { ctx.strokeStyle = AUTUMN.gold; ctx.lineWidth = 1.5 * k; ctx.beginPath(); ctx.moveTo(cx - 22 * k, hy); ctx.lineTo(cx - 22 * k - half, hy); ctx.moveTo(cx + 22 * k, hy); ctx.lineTo(cx + 22 * k + half, hy); ctx.stroke(); }
+  const ha = prog(ts, 0.55, 0.8);
+  if (ha > 0) { ctx.globalAlpha = out * ha; drawLeaf(ctx, { type: 'maple', color: AUTUMN.maple[1] }, cx, hy, 30 * k, 0.15); }
+  const ta = ease(prog(t, 0.7, 1.3));
+  if (ta > 0) { ctx.globalAlpha = out * ta; setFont(ctx, 300, 34 * k, 34 * k * 0.2); ctx.fillStyle = AUTUMN.sub; centerText(ctx, '오늘은', cx, yc - 34 * k + (1 - ta) * 8, 34 * k * 0.2); }
+  const ma = ease(prog(t, 0.95, 1.75));
+  if (ma > 0 && text) { ctx.globalAlpha = out * ma; const lsR = 0.08 + 0.12 * (1 - ma); const px = fitPx(ctx, text, 300, 92 * k, W * (vert ? 0.82 : 0.6), lsR); ctx.fillStyle = AUTUMN.ink; centerText(ctx, text, cx, yc + 64 * k + (1 - ma) * 10, px * lsR); }
+  const fa = ease(prog(t, 1.35, 1.95));
+  if (fa > 0) { ctx.globalAlpha = out * fa; setFont(ctx, 400, 21 * k, 21 * k * 0.38); ctx.fillStyle = AUTUMN.gold; centerText(ctx, '토순이 친구', cx, yc + 160 * k, 21 * k * 0.38); }
+  ctx.restore(); resetFont(ctx);
+}
+// 낙엽 전환: 잎들이 비스듬히 쏟아지며 화면을 덮었다가(크림색) 걷힘. cut 지점에서 완전히 가려짐
+function drawAutumnTransition(ctx, W, H, t) {
+  const D = AUTUMN.transSec, C = AUTUMN.transCut;
+  if (t < 0 || t > D) return;
+  const cover = t < C ? easeOut(prog(t, C - 0.35, C)) : 1 - ease(prog(t, C + 0.05, C + 0.5));
+  if (cover > 0) { ctx.save(); ctx.globalAlpha = cover; ctx.drawImage(paperTexture(W, H, AUTUMN.paper), 0, 0); ctx.restore(); }
+  const r = aRng(23), k = Math.min(W, H) / 1080, n = 34, ts = stepT(t);
+  for (let i = 0; i < n; i++) {
+    const L = pickLeaf(r);
+    const st = r() * 0.55, life = 0.75 + r() * 0.2;
+    const p = (ts - st) / life;
+    if (p <= 0 || p >= 1) continue;
+    const x0 = (r() * 1.4 - 0.5) * W, x = x0 + p * W * 0.45;
+    const y = -0.15 * H + p * H * 1.3 + Math.sin(p * 8 + i) * 20 * k;
+    drawLeaf(ctx, L, x, y, (110 + r() * 110) * k, r() * 6 + p * (r() < .5 ? 3 : -3));
+  }
+}
+// 본편 위 낙엽 테두리: 아래 양쪽 구석에만 조금
+const frameCache = new Map();
+function autumnFrame(W, H) {
+  const key = W + 'x' + H;
+  if (frameCache.has(key)) return frameCache.get(key);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'), r = aRng(31), k = Math.min(W, H) / 1080;
+  const spots = [[0.02, 0.98, 150], [0.09, 1.0, 120], [-0.01, 0.9, 110], [0.15, 1.02, 95], [0.06, 0.93, 80], [0.98, 1.0, 130], [0.91, 1.02, 100], [1.0, 0.93, 90]];
+  for (const [fx, fy, sz] of spots) drawLeaf(g, pickLeaf(r), fx * W, fy * H, sz * k, r() * 6);
+  frameCache.set(key, c);
+  return c;
+}
+
 // 보태니컬(초록) 타이틀: 템플릿 영상 위에 큰 글씨만 얹음 (botanical-template-source.html과 같은 위치)
 function drawGreenTitleText(ctx, W, H, fmt, text, t) {
   if (!text) return;
@@ -424,10 +576,18 @@ function outputsOf(clip) {
   return outs;
 }
 
+// 본편 위 테두리: 보태니컬은 PNG, 가을은 낙엽 그림
+async function frameOverlay(fmt, W, H) {
+  if (!state.frame) return null;
+  if (state.theme === 'botanical') return image(pickSrc(ASSET.corner, fmt));
+  if (state.theme === 'autumn') return autumnFrame(W, H);
+  return null;
+}
+
 // 한 편의 타임라인
 function buildPlan(clip, out) {
   const fmt = out.fmt, [W, H] = SIZE[fmt];
-  const botan = state.theme === 'botanical';
+  const botan = state.theme === 'botanical', autumn = state.theme === 'autumn';
   const segs = [];
   const vertSrc = clip.h > clip.w;
 
@@ -435,6 +595,7 @@ function buildPlan(clip, out) {
   const title = (clip.title || '').trim();
   if (title) {
     if (botan) segs.push({ kind: 'asset', role: 'title', src: pickSrc(ASSET.greenTitle, fmt), text: title });
+    else if (autumn) segs.push({ kind: 'still', role: 'title', style: 'autumn', dur: AUTUMN.titleSec, text: title });
     else segs.push({ kind: 'still', role: 'title', dur: CLASSIC_TITLE_SEC, text: title });
   }
   const main = {
@@ -443,7 +604,7 @@ function buildPlan(clip, out) {
     caption: (clip.caption || '').trim(),
   };
   const intoMain = segs.length > 0;
-  if (intoMain) { if (botan) segs[segs.length - 1].wipe = true; else main.fadeIn = RULE.fadeInFromIvory; }
+  if (intoMain) { if (botan) segs[segs.length - 1].wipe = true; else if (autumn) main.leafIn = true; else main.fadeIn = RULE.fadeInFromIvory; }
   segs.push(main);
   if (fmt === 'v' && state.ending !== 'none') {
     const end = { kind: 'asset', src: ASSET.ending.v };
@@ -463,7 +624,7 @@ async function runPlan(plan, { record, onProgress }) {
   const ac = getAudioCtx(); await ac.resume();
   await document.fonts.load('300 60px "Noto Sans KR"', 'TOSOONI 오늘은 토순이 친구' + segs.map((s) => (s.text || '') + (s.caption || '')).join(''));
   await document.fonts.load('400 40px "Noto Sans KR"', '토순이 친구' + segs.map((s) => s.caption || '').join(''));
-  const cornerImg = state.frame ? await image(pickSrc(ASSET.corner, fmt)) : null;
+  const cornerImg = await frameOverlay(fmt, W, H);
 
   // 오디오: 각 소스 → 음량 → 마스터 → 리미터 → 스피커(+녹음)
   const master = ac.createGain();
@@ -525,7 +686,7 @@ async function runPlan(plan, { record, onProgress }) {
     const t = s.kind === 'still' ? T - s.start : s.el.currentTime;
     ctx.save();
     if (s.xfade) ctx.globalAlpha = clamp((T - s.start) / s.xfade);
-    if (s.kind === 'still') drawClassicTitle(ctx, W, H, fmt, s.text, t);
+    if (s.kind === 'still') (s.style === 'autumn' ? drawAutumnTitle : drawClassicTitle)(ctx, W, H, fmt, s.text, t);
     else if (s.kind === 'asset') {
       if (s.el.readyState >= 2) drawAsset(ctx, s.el, W, H);
       if (s.role === 'title') drawGreenTitleText(ctx, W, H, fmt, s.text, t);
@@ -569,6 +730,7 @@ async function runPlan(plan, { record, onProgress }) {
       for (const s of live) drawSeg(s, T);
       if (!live.length) { const prev = [...segs].reverse().find((s) => T >= s.start); if (prev) drawSeg(prev, T); }
       for (const s of segs) if (s.wipeStarted && !s.wipeEl.ended && s.wipeEl.readyState >= 2) ctx.drawImage(keyer.key(s.wipeEl), 0, 0, W, H);
+      for (const s of segs) if (s.leafIn) drawAutumnTransition(ctx, W, H, T - s.start + AUTUMN.transCut);
       onProgress && onProgress(T, total);
       if (document.hidden) setTimeout(tick, 1000 / 30); else requestAnimationFrame(tick);
     };
@@ -604,11 +766,14 @@ const paint = (id, v) => $(id).querySelectorAll('button').forEach((b) => b.class
 
 function refresh() {
   paint('themeSeg', state.theme); paint('openingSeg', state.opening); paint('endingSeg', state.ending);
-  $('themeNote').textContent = state.theme === 'classic'
-    ? '본편은 깨끗하게 두고, 아이보리 타이틀과 부드러운 페이드로만 이어요.'
-    : '초록 타이틀 카드와 잎 전환을 써요. 본편에 초록이 많아지면 무거워 보일 수 있어요.';
-  $('frameCheck').hidden = state.theme !== 'botanical';
-  if (state.theme !== 'botanical') state.frame = false;
+  $('themeNote').textContent = {
+    classic: '본편은 깨끗하게 두고, 아이보리 타이틀과 부드러운 페이드로만 이어요.',
+    autumn: '크림 종이 위에 단풍잎·은행잎이 내려앉는 타이틀, 낙엽이 쏟아지며 넘어가는 전환이에요.',
+    botanical: '초록 타이틀 카드와 잎 전환을 써요. 본편에 초록이 많아지면 무거워 보일 수 있어요.',
+  }[state.theme];
+  $('frameCheck').hidden = state.theme === 'classic';
+  $('frameLabel').textContent = state.theme === 'autumn' ? '아래 구석에 낙엽 몇 장' : '보태니컬 모서리 테두리';
+  if (state.theme === 'classic') state.frame = false;
   $('frame').checked = state.frame;
   const ready = state.clips.filter((c) => c.status === 'ready');
   const busy = state.clips.some((c) => c.status === 'preparing');
@@ -640,7 +805,7 @@ async function drawStill() {
   sctx.fillStyle = RULE.ivory; sctx.fillRect(0, 0, W, H);
   if (!sel || !sel.clip.thumb || !sel.clip.thumb.videoWidth) return;
   await document.fonts.load('300 30px "Noto Sans KR"', 'TOSOONI').catch(() => {});
-  const corner = state.frame ? await image(pickSrc(ASSET.corner, fmt)).catch(() => null) : null;
+  const corner = await frameOverlay(fmt, W, H).catch(() => null);
   if (tok !== stillTok || state.running) return;
   const c = sel.clip, vertSrc = c.h > c.w;
   const mode = sel.out.kind === 'crop' ? { cropX: c.cropX } : (vertSrc && fmt === 'h') ? 'contain' : 'cover';
