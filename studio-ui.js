@@ -164,7 +164,7 @@
     for (let i = 0; i < list.length; i++) trackSpot(list[i]);
   }
   trackSpots();
-  if (clipList) new MutationObserver(() => trackSpots(clipList)).observe(clipList, { childList: true });
+  if (clipList) new MutationObserver(() => { trackSpots(clipList); decorateClipFields(); }).observe(clipList, { childList: true });
 
   // ---------------------------------------------------------------- 3-b. 미리보기 스포트라이트 + '보정 전' 비교
   const fx = $('stageFx');
@@ -203,12 +203,12 @@
 
     const rect = screenCv.getBoundingClientRect();
     const shownW = rect.width || W;
-    const side = Math.max(1, Math.min(W, H, 148 * (W / shownW)));
+    const side = Math.max(1, Math.min(W, H, 128 * (W / shownW)));
     const cx = mx * W, cy = my * H;
     const sx = clamp(cx - side / 2, 0, Math.max(0, W - side));
     const sy = clamp(cy - side / 2, 0, Math.max(0, H - side));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const px = Math.round(148 * dpr);
+    const px = Math.round(128 * dpr);
     if (cmpCv.width !== px || cmpCv.height !== px) { cmpCv.width = px; cmpCv.height = px; }
     cmpCtx.setTransform(1, 0, 0, 1, 0, 0);
     cmpCtx.clearRect(0, 0, px, px);
@@ -218,6 +218,7 @@
 
   function onStageMove(e) {
     if (e.pointerType === 'touch') return;
+    if (e.target && e.target.closest && e.target.closest('.edit-hot')) { hideCmp(); return; }
     const r = stage.getBoundingClientRect();
     if (!r.width || !r.height) return;
     const x = e.clientX - r.left, y = e.clientY - r.top;
@@ -241,8 +242,27 @@
   const cardScaleEl = $('cardScale'), cardScaleVal = $('cardScaleVal');
   const iconSeg = $('iconSeg'), iconPick = $('iconPick'), iconFile = $('iconFile');
 
+  const wrapEl = document.querySelector('.wrap');
+  function decorateClipFields() {
+    const on = !!state.card;
+    if (wrapEl) wrapEl.classList.toggle('card-mode', on);
+    document.querySelectorAll('.clip-card').forEach((card) => {
+      const labels = card.querySelectorAll('.mini');
+      const t = labels[0], c = labels[1];
+      const set = (label, text, hint) => {
+        if (!label) return;
+        if (label.firstChild && label.firstChild.nodeType === 3) label.firstChild.nodeValue = text + ' ';
+        const sm = label.querySelector('small');
+        if (sm && hint) sm.textContent = hint;
+      };
+      set(t, on ? '카드 제목' : '타이틀 카드', on ? '카드 맨 위, 프로필 아래에 들어가요' : '"오늘은" 아래 큰 글씨. 비우면 바로 본편');
+      set(c, on ? '카드 자막' : '도입부 자막', on ? '영상 아래에 한 줄로 들어가요' : '반전이 있는 영상만. 위쪽에 작게 ' + 3.5 + '초');
+    });
+  }
+
   function syncCardUI() {
     const on = !!state.card;
+    decorateClipFields();
     if (cardSeg) {
       cardSeg.querySelectorAll('button').forEach((b) => {
         const isOn = (b.dataset.v === 'on') === on;
