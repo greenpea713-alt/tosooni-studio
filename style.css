@@ -220,3 +220,8 @@ input.plain:focus{border-color:var(--gold)}
 
 /* 카드 모드에서는 타이틀 앞 '오늘은' 접두어를 숨겨요 (카드 제목은 그대로 들어감) */
 .card-mode .title-pre{display:none}
+.card-row input[type=range]{-webkit-appearance:none;appearance:none;height:22px;background:transparent}
+.card-row input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:#EFE5D8}
+.card-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-6px;border-radius:50%;background:#FFFDF9;border:2px solid #E8A3AE;box-shadow:0 1px 4px rgba(47,46,43,.18);cursor:pointer}
+.card-row input[type=range]::-moz-range-track{height:4px;border-radius:999px;background:#EFE5D8}
+.card-row input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#FFFDF9;border:2px solid #E8A3AE}
