@@ -99,8 +99,11 @@
   let hoverSay = null;
   let shown = '';
   let swapTok = 0;
-  function say(text) {
-    if (!text || text === shown) return;
+  let holdUntil = 0;
+  function say(text, holdMs) {
+    if (!text) return;
+    if (holdMs) holdUntil = Date.now() + holdMs;
+    if (text === shown) return;
     shown = text;
     const tok = ++swapTok;
     bubble.classList.add('swap');
@@ -316,7 +319,7 @@
     syncCardUI();
     refresh();
     renderEditOverlay();
-    say(b.dataset.v === 'none' ? '프로필 동그라미를 뺐어. 제목이 위로 올라와.' : '동그란 토순이 프로필로 돌아왔어!');
+    say(b.dataset.v === 'none' ? '프로필 동그라미를 뺐어. 제목이 위로 올라와.' : '동그란 토순이 프로필로 돌아왔어!', 2600);
   });
   if (iconPick && iconFile) {
     iconPick.addEventListener('click', () => { if (!isRunning()) iconFile.click(); });
@@ -324,14 +327,14 @@
       const f = iconFile.files && iconFile.files[0];
       iconFile.value = '';
       if (!f) return;
-      if (!/^image\//.test(f.type)) { say('사진 파일(png·jpg)만 넣을 수 있어!'); return; }
+      if (!/^image\//.test(f.type)) { say('사진 파일(png·jpg)만 넣을 수 있어!', 2600); return; }
       const fr = new FileReader();
       fr.onload = () => {
         state.cardIcon = String(fr.result);
         syncCardUI();
         refresh();
         renderEditOverlay();
-        say('프로필 사진을 바꿨어! 카드 위에 동그랗게 들어갔어.');
+        say('프로필 사진을 바꿨어! 카드 위에 동그랗게 들어갔어.', 2600);
       };
       fr.readAsDataURL(f);
     });
@@ -430,7 +433,7 @@
       if (kind === 'title') clip.title = v; else clip.caption = v;
       renderClipList();
       refresh();
-      say(kind === 'title' ? '제목을 고쳤어! 카드에도 그대로 들어갔어.' : '자막을 고쳤어! 이제 내보내기에도 그대로 들어가.');
+      say(kind === 'title' ? '제목을 고쳤어! 카드에도 그대로 들어갔어.' : '자막을 고쳤어! 이제 내보내기에도 그대로 들어가.', 2600);
     }
     renderEditOverlay();
   }
@@ -446,7 +449,7 @@
   renderEditOverlay();
   setInterval(() => {
     markPresets();
-    say(guideLine());
+    if (hoverSay || Date.now() >= holdUntil) say(guideLine());
     renderEditOverlay();
     if (isRunning()) hideCmp();
   }, 420);
