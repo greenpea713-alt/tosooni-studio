@@ -780,13 +780,116 @@ function addResult(c, o, { blob, mime }) {
   results.push({ name, url });
   const ul = $('results'); ul.hidden = false;
   const li = document.createElement('li');
-  li.innerHTML = `<video controls playsinline preload="metadata"></video><div class="r-meta"><div class="name"></div><div class="sub"></div><a class="btn small" download>내려받기</a></div>`;
+  const shorts = o.fmt === 'v';
+  const title = (c.title || '').trim() ? `오늘은 ${c.title.trim()}` : '토순이 친구';
+  li.innerHTML = `<video controls playsinline preload="metadata"></video>
+    <div class="r-meta">
+      <div class="name"></div><div class="sub"></div>
+      <div class="r-actions"><a class="btn small" download>내려받기</a><button class="btn ghost small yt-open">유튜브에 올리기</button></div>
+      <div class="yt-form" hidden>
+        <label class="mini">제목<input type="text" class="plain yt-title" maxlength="100"></label>
+        <label class="mini">설명<textarea class="plain yt-desc" rows="3"></textarea></label>
+        <label class="mini">공개 범위
+          <select class="plain yt-privacy"><option value="private">비공개</option><option value="unlisted">일부 공개 (링크 있는 사람만)</option><option value="public">공개</option></select></label>
+        <label class="check"><input type="checkbox" class="yt-kids"> 아동용 영상이에요</label>
+        <div class="r-actions"><button class="btn small yt-go">올리기</button></div>
+        <div class="bar"><div class="bar-fill yt-bar"></div></div>
+        <div class="sub yt-msg"></div>
+      </div>
+    </div>`;
   li.querySelector('video').src = url;
   li.querySelector('.name').textContent = name;
-  li.querySelector('.sub').textContent = `${o.label} · ${(blob.size / 1048576).toFixed(1)}MB${isMp4 ? '' : ' · 이 브라우저는 webm으로 저장돼요(유튜브 업로드 가능)'}`;
+  li.querySelector('.sub').textContent = `${o.label} · ${(blob.size / 1048576).toFixed(1)}MB`;
   const a = li.querySelector('a'); a.href = url; a.download = name;
-  if (o.fmt === 'v') li.classList.add('vert');
+  li.querySelector('.yt-title').value = title + (shorts ? ' #Shorts' : '');
+  li.querySelector('.yt-desc').value = '토순이 친구 🐰\n\n#토순이친구 #반려토끼 #토끼' + (shorts ? ' #Shorts' : '');
+  li.querySelector('.yt-open').addEventListener('click', () => { const f = li.querySelector('.yt-form'); f.hidden = !f.hidden; });
+  li.querySelector('.yt-go').addEventListener('click', () => uploadToYouTube(li, blob, mime, shorts));
+  if (shorts) li.classList.add('vert');
   ul.prepend(li);
+}
+
+// ================================================================ 유튜브 업로드 (구글 로그인 → YouTube Data API v3, 이어올리기 방식)
+let gisP = null, ytToken = null;
+function loadGis() {
+  return (gisP ||= new Promise((res, rej) => {
+    const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client';
+    sc.onload = res; sc.onerror = () => { gisP = null; rej(new Error('구글 로그인 도구를 불러오지 못했어요')); }; document.head.append(sc);
+  }));
+}
+function getYtToken() {
+  const cid = (window.TOSOONI_CONFIG || {}).googleClientId;
+  if (!cid) return Promise.reject(new Error('아직 구글 연결 설정이 안 돼 있어요. 설정이 끝나면 바로 쓸 수 있어요.'));
+  if (ytToken && ytToken.exp > Date.now() + 60000) return Promise.resolve(ytToken.value);
+  return loadGis().then(() => new Promise((res, rej) => {
+    const tc = google.accounts.oauth2.initTokenClient({
+      client_id: cid,
+      scope: 'https://www.googleapis.com/auth/youtube.upload',
+      callback: (r) => {
+        if (r.error) return rej(new Error('구글 로그인이 취소됐거나 실패했어요'));
+        ytToken = { value: r.access_token, exp: Date.now() + (r.expires_in || 3600) * 1000 };
+        res(ytToken.value);
+      },
+      error_callback: () => rej(new Error('구글 로그인 창이 닫혔어요. 팝업 차단을 꺼 주세요.')),
+    });
+    tc.requestAccessToken();
+  }));
+}
+async function uploadToYouTube(li, blob, mime, shorts) {
+  const msg = li.querySelector('.yt-msg'), bar = li.querySelector('.yt-bar'), go = li.querySelector('.yt-go');
+  const say = (t) => { msg.textContent = t; };
+  go.disabled = true;
+  try {
+    say('구글 로그인 중…');
+    const token = await getYtToken();
+    const meta = {
+      snippet: {
+        title: li.querySelector('.yt-title').value.trim().slice(0, 100) || '토순이 친구',
+        description: li.querySelector('.yt-desc').value,
+        tags: ['토순이친구', '반려토끼', '토끼'].concat(shorts ? ['Shorts'] : []),
+        categoryId: '15',            // 반려동물/동물
+        defaultLanguage: 'ko', defaultAudioLanguage: 'ko',
+      },
+      status: { privacyStatus: li.querySelector('.yt-privacy').value, selfDeclaredMadeForKids: li.querySelector('.yt-kids').checked },
+    };
+    const type = (mime || blob.type || 'video/mp4').split(';')[0];
+    say('업로드 준비 중…');
+    const init = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': type, 'X-Upload-Content-Length': String(blob.size) },
+      body: JSON.stringify(meta),
+    });
+    if (!init.ok) throw new Error(await ytError(init));
+    const loc = init.headers.get('Location');
+    if (!loc) throw new Error('업로드 주소를 받지 못했어요');
+    const res = await new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('PUT', loc);
+      x.setRequestHeader('Authorization', 'Bearer ' + token);
+      x.setRequestHeader('Content-Type', type);
+      x.upload.onprogress = (e) => { if (e.lengthComputable) { bar.style.width = (e.loaded / e.total * 100).toFixed(1) + '%'; say(`올리는 중… ${Math.round(e.loaded / e.total * 100)}%`); } };
+      x.onload = () => (x.status >= 200 && x.status < 300 ? resolve(JSON.parse(x.responseText)) : reject(new Error(ytErrorText(x.status, x.responseText))));
+      x.onerror = () => reject(new Error('인터넷 연결이 끊겼어요. 다시 눌러 주세요.'));
+      x.send(blob);
+    });
+    const link = shorts ? `https://youtube.com/shorts/${res.id}` : `https://youtu.be/${res.id}`;
+    const priv = res.status && res.status.privacyStatus;
+    msg.innerHTML = `올렸어요! <a href="${link}" target="_blank" rel="noopener">${link}</a> · 유튜브에서 처리하는 데 몇 분 걸릴 수 있어요.`
+      + (priv && priv !== meta.status.privacyStatus ? ' 아직 심사 전인 앱이라 유튜브가 비공개로 올렸어요. 유튜브 스튜디오에서 공개로 바꿀 수 있어요.' : '');
+    li.querySelector('.yt-open').textContent = '유튜브에 올림 ✓';
+  } catch (e) {
+    console.error(e); say(e.message || String(e)); go.disabled = false;
+  }
+}
+async function ytError(r) { return ytErrorText(r.status, await r.text()); }
+function ytErrorText(status, body) {
+  let reason = '';
+  try { const j = JSON.parse(body); reason = (j.error && (j.error.errors?.[0]?.reason || j.error.message)) || ''; } catch (e) {}
+  if (status === 401) { ytToken = null; return '구글 로그인이 만료됐어요. 다시 눌러 주세요.'; }
+  if (/quota/i.test(reason)) return '오늘 유튜브 업로드 한도를 다 썼어요. 내일 다시 해 주세요.';
+  if (/youtubeSignupRequired/i.test(reason)) return '이 구글 계정에 유튜브 채널이 없어요. 채널이 있는 계정으로 로그인해 주세요.';
+  if (/uploadLimitExceeded/i.test(reason)) return '이 채널의 하루 업로드 한도를 넘었어요.';
+  return `업로드 실패 (${status}${reason ? ', ' + reason : ''})`;
 }
 
 refresh();

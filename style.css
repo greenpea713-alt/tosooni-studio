@@ -91,3 +91,9 @@ input.plain:focus{border-color:var(--gold)}
 .btn:disabled{opacity:.35;cursor:not-allowed}
 .foot{text-align:center;color:var(--dove);font-size:12px;letter-spacing:.3em;padding:20px 16px 48px;display:flex;justify-content:center;align-items:center;gap:10px}
 .clips .warn{color:#B0707C}
+.r-actions{display:flex;gap:6px;flex-wrap:wrap}
+.yt-form{display:flex;flex-direction:column;gap:8px;margin-top:6px;border-top:1px solid var(--pearl);padding-top:10px}
+.yt-form textarea{resize:vertical;font-family:inherit;font-size:13px;line-height:1.5}
+.yt-form select{font-family:inherit;font-size:13px}
+.yt-msg a{color:var(--charcoal)}
+@media (max-width:600px){.results li{flex-direction:column}.results video{max-width:100%;width:100%}.results li.vert video{width:60%}}
