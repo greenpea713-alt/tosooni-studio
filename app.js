@@ -37,8 +37,9 @@ const pickSrc = (e, fmt) => e[fmt] || e.h || e.v;
 const state = {
   clips: [],
   theme: 'classic',
-  opening: 'intro4s',
-  ending: 'shorts',
+  join: 'auto', joinHint: null,   // 여러 영상: 자동 추천 / 각각 / 이어서
+  opening: 'photo',     // 시작 인트로: 동그란 실제 사진 1.1초 (기본)
+  ending: 'none',       // 끝 엔딩은 시작과 따로. 기본은 없음
   watermark: true, grade: true, frame: false,
   clean: true, muteHiss: true, normalize: true,
   running: false,
@@ -78,10 +79,14 @@ function makeMedia(tag, src, { muted = false } = {}) {
     v.preload = 'auto'; v.playsInline = true; v.muted = muted; v.crossOrigin = 'anonymous';
     v.style.cssText = 'width:2px;height:2px';
     v.src = src;
+    let soft = 0, hard = 0;
     const done = () => { off(); res(v); };
-    const fail = () => { off(); v.remove(); rej(new Error('영상을 열지 못했어요')); };
-    const off = () => { v.removeEventListener('loadeddata', done); v.removeEventListener('error', fail); };
+    const fail = (msg) => { off(); v.remove(); rej(new Error(typeof msg === 'string' ? msg : '영상을 열지 못했어요')); };
+    const meta = () => { soft = setTimeout(done, 2500); };   // 아이폰은 데이터 로딩을 미루기도 해서, 크기·길이만 알면 2.5초 뒤 진행
+    const off = () => { clearTimeout(soft); clearTimeout(hard); v.removeEventListener('loadeddata', done); v.removeEventListener('loadedmetadata', meta); v.removeEventListener('error', fail); };
+    hard = setTimeout(() => (v.readyState >= 1 ? done() : fail('영상을 여는 데 너무 오래 걸려요')), 25000);
     v.addEventListener('loadeddata', done);
+    v.addEventListener('loadedmetadata', meta);
     v.addEventListener('error', fail);
     shelf.append(v);
     v.load();
@@ -388,14 +393,44 @@ function drawIconCard(ctx, W, H, fmt, text, t) {
   ctx.restore();
 }
 
-// ---------------------------------------------------------------- 미니멀 인트로: 매끈한 아이보리 · 얇은 골드 호 · 작은 토순이 · 하트 하나 · TOSOONI
-const MINIMAL_SEC = 3.4;
-function drawMinimalIntro(ctx, W, H, fmt, text, t) {
+// ---------------------------------------------------------------- 사진 인트로: 매끈한 아이보리 위 동그란 토순이 얼굴 사진 1.1초 + 작은 TOSOONI
+const PHOTO_SEC = 1.1;
+const FACE_SRC = A + 'tosooni-face-photo.jpg';
+let facePhoto = null;
+image(FACE_SRC).then((im) => { facePhoto = im; }).catch(() => {});
+function drawPhotoIntro(ctx, W, H, fmt, text, t) {
   ctx.drawImage(paperTexture(W, H), 0, 0);
+  const k = Math.min(W, H) / 1080;
+  const a = ease(prog(t, 0, 0.2)) * (1 - ease(prog(t, PHOTO_SEC - 0.26, PHOTO_SEC - 0.02)));
+  if (a <= 0) return;
+  const cx = W / 2, cy = H * (fmt === 'v' ? 0.46 : 0.45);
+  const r = 184 * k * (0.97 + 0.03 * easeOut(prog(t, 0, 0.6)));
+  ctx.save(); ctx.globalAlpha = a;
+  if (facePhoto) {
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+    ctx.drawImage(facePhoto, cx - r, cy - r, r * 2, r * 2);   // 정사각형 사진을 정사각형 자리에 (비율 그대로)
+    ctx.restore();
+  } else { ctx.fillStyle = '#E4DED4'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(191,163,115,0.75)'; ctx.lineWidth = 1.2 * k;
+  ctx.beginPath(); ctx.arc(cx, cy, r + 9 * k, 0, Math.PI * 2); ctx.stroke();
+  const la = ease(prog(t, 0.08, 0.38));
+  if (la > 0) {
+    ctx.globalAlpha = a * la; const px = 30 * k, ls = px * 0.5;
+    setFont(ctx, 300, px, ls); ctx.fillStyle = '#2F2E2B'; ctx.textBaseline = 'alphabetic';
+    centerText(ctx, 'TOSOONI', cx, cy + r + 78 * k, ls);
+  }
+  ctx.restore(); resetFont(ctx);
+}
+
+// ---------------------------------------------------------------- 미니멀 인트로: 매끈한 아이보리 · 얇은 골드 호 · 작은 토순이 · 하트 하나 · TOSOONI
+const MINIMAL_SEC = 2.4;
+function drawMinimalIntro(ctx, W, H, fmt, text, tReal) {
+  ctx.drawImage(paperTexture(W, H), 0, 0);
+  const t = tReal * 1.45;   // 짧게: 원래 3.4초 흐름을 2.4초에 (끝 페이드는 실제 시간 기준)
   const vert = fmt === 'v', k = W / (vert ? 1080 : 1920) * (vert ? 1.25 : 1);
   const cx = W / 2, cy = H * (vert ? 0.45 : 0.42);
-  const out = 1 - ease(prog(t, MINIMAL_SEC - 0.5, MINIMAL_SEC - 0.06));
-  const R = 112 * k;
+  const out = 1 - ease(prog(tReal, MINIMAL_SEC - 0.4, MINIMAL_SEC - 0.05));
+  const R = 100 * k;
   ctx.save(); ctx.globalAlpha = out;
   // 얇은 골드 호: 꼭대기(하트 자리)를 비워 두고 양옆으로 천천히 그려짐
   const lp = easeOut(prog(t, 0.15, 1.2));
@@ -408,12 +443,12 @@ function drawMinimalIntro(ctx, W, H, fmt, text, t) {
   const ha = prog(t, 0.95, 1.35);
   if (ha > 0) { ctx.globalAlpha = out * ha; ctx.fillStyle = '#E8A3AE'; heartPath(ctx, cx, cy - R, 7 * k * (0.8 + 0.2 * easeOut(ha))); ctx.fill(); }
   const ra = ease(prog(t, 0.5, 1.2));
-  if (ra > 0) { ctx.globalAlpha = out * ra; drawTosooniIcon(ctx, cx, cy + (1 - ra) * 6 * k, 66 * k); }
+  if (ra > 0) { ctx.globalAlpha = out * ra; drawTosooniIcon(ctx, cx, cy + (1 - ra) * 6 * k, 58 * k); }
   ctx.textBaseline = 'alphabetic';
   const la = ease(prog(t, 1.15, 1.85));
-  if (la > 0) { ctx.globalAlpha = out * la; const px = 38 * k, ls = px * 0.5; setFont(ctx, 300, px, ls); ctx.fillStyle = '#2F2E2B'; centerText(ctx, 'TOSOONI', cx, cy + R + 64 * k + (1 - la) * 6 * k, ls); }
+  if (la > 0) { ctx.globalAlpha = out * la; const px = 46 * k, ls = px * 0.5; setFont(ctx, 300, px, ls); ctx.fillStyle = '#2F2E2B'; centerText(ctx, 'TOSOONI', cx, cy + R + 74 * k + (1 - la) * 6 * k, ls); }
   const sa = ease(prog(t, 1.45, 2.05));
-  if (sa > 0) { ctx.globalAlpha = out * sa; const px = 16 * k, ls = px * 0.5; setFont(ctx, 400, px, ls); ctx.fillStyle = '#BFA373'; centerText(ctx, '토순이 친구', cx, cy + R + 102 * k, ls); }
+  if (sa > 0) { ctx.globalAlpha = out * sa; const px = 16 * k, ls = px * 0.5; setFont(ctx, 400, px, ls); ctx.fillStyle = '#BFA373'; centerText(ctx, '토순이 친구', cx, cy + R + 112 * k, ls); }
   ctx.restore(); resetFont(ctx);
 }
 
@@ -651,8 +686,9 @@ async function lufsOfBuffer(ab) {
   return L(gated.reduce((a, b) => a + b, 0) / gated.length) + (out.numberOfChannels === 1 ? 3.01 : 0);
 }
 const lufsCache = new Map();
-function lufsOfUrl(url) {
-  if (!lufsCache.has(url)) lufsCache.set(url, fetch(url).then((r) => r.arrayBuffer()).then(lufsOfBuffer).catch(() => null));
+function lufsOfUrl(url, bytes = 0) {
+  if (bytes > 250 * 1048576) return Promise.resolve(null);   // 아주 큰 원본은 통째로 읽지 않음 (휴대폰 메모리 보호)
+  if (!lufsCache.has(url)) lufsCache.set(url, withTimeout(fetch(url).then((r) => r.arrayBuffer()).then(lufsOfBuffer), 20000, '음량 측정 시간 초과').catch(() => null));
   return lufsCache.get(url);
 }
 const gainFor = (lufs) => (lufs == null || lufs < -90 ? 1 : clamp(Math.pow(10, (RULE.targetLufs - lufs) / 20), 0.05, 20));
@@ -747,7 +783,21 @@ async function prepareClip(clip) {
 
 // ================================================================ 결과물 목록 (규칙 적용)
 // 한 클립에서: 기본 1편 + (가로·3분 이하이고 원하면) 세로 크롭 쇼츠 1편
+// 여러 영상 이어 붙이기: state.join = 'auto' | 'each' | 'join'. auto면 추천(state.joinHint)을 따름
+const joinOn = () => { const rc = joinClips(); return rc.length >= 2 && (state.join === 'join' || (state.join === 'auto' && state.joinHint && state.joinHint.join)); };
+const joinClips = () => state.clips.filter((c) => c.status === 'ready' && !c.solo);
+function joinedOut() {
+  const cs = joinClips(), total = cs.reduce((a, c) => a + (c.dur || 0), 0);
+  const allV = cs.every((c) => c.h > c.w);
+  return allV && total <= RULE.shortsMaxSec
+    ? { kind: 'joined', fmt: 'v', label: `이어서 한 편 · 세로 쇼츠 1080×1920 (${cs.length}개)` }
+    : { kind: 'joined', fmt: 'h', label: `이어서 한 편 · 가로 1920×1080 (${cs.length}개)` };
+}
 function outputsOf(clip) {
+  if (joinOn() && joinClips().includes(clip)) return joinClips()[0] === clip ? [joinedOut()] : [];
+  return outputsEach(clip);
+}
+function outputsEach(clip) {
   const vertSrc = clip.h > clip.w;
   const long = clip.dur > RULE.shortsMaxSec;
   const outs = [];
@@ -771,9 +821,9 @@ function buildPlan(clip, out, opts = {}) {
   const botan = state.theme === 'botanical', autumn = state.theme === 'autumn';
   const cardOn = !!state.card && fmt === 'v';   // 카드에서는 제목이 카드 안에 있어요
   const segs = [];
-  const vertSrc = clip.h > clip.w;
 
-  if (state.opening === 'minimal') segs.push({ kind: 'still', style: 'minimal', role: 'opening', dur: MINIMAL_SEC });
+  if (state.opening === 'photo') segs.push({ kind: 'still', style: 'photo', role: 'opening', dur: PHOTO_SEC });
+  else if (state.opening === 'minimal') segs.push({ kind: 'still', style: 'minimal', role: 'opening', dur: MINIMAL_SEC });
   else if (state.opening !== 'none') segs.push({ kind: 'asset', role: 'opening', src: pickSrc(ASSET.opening[state.opening], fmt) });   // 가로·쇼츠 모두 오프닝부터
   const title = (clip.title || '').trim();
   if (title && !cardOn) {
@@ -783,23 +833,32 @@ function buildPlan(clip, out, opts = {}) {
   }
   const classic = !botan && !autumn;
   // 클래식: 오프닝 뒤 타이틀이 없으면 가운데 동그란 토순이 아이콘 카드로 한 번 쉬어 감
-  if (classic && !title && segs.length && !cardOn && state.opening !== 'minimal') segs.push({ kind: 'still', style: 'icon', role: 'pause', dur: ICON_CARD_SEC });
-  const main = {
-    kind: 'clip', src: clip.url, clip, card: cardOn,
-    mode: out.kind === 'crop' ? { cropX: clip.cropX } : (vertSrc && fmt === 'h') ? 'contain' : 'cover',
-    caption: (clip.caption || '').trim(), capStart: clip.capStart || 0, capDur: clip.capDur || RULE.captionSec, role: 'main',
-  };
+  if (classic && !title && segs.length && !cardOn && state.opening !== 'minimal' && state.opening !== 'photo') segs.push({ kind: 'still', style: 'icon', role: 'pause', dur: ICON_CARD_SEC });
+  // 본편: 한 편이면 영상 하나, '이어서 한 편'이면 올린 순서대로 (사이는 0.25초 아이보리로 살짝 끊었다 이음)
+  const list = out.kind === 'joined' ? joinClips() : [clip];
+  const mains = list.map((c) => {
+    const cv = c.h > c.w, fv = fmt === 'v';
+    return {
+      kind: 'clip', src: c.url, clip: c, card: cardOn,
+      // 비율은 절대 늘리지 않음: 방향이 같으면 꽉 채우고(cover), 다르면 통째로 넣고 남는 곳은 아이보리(contain)
+      mode: out.kind === 'crop' ? { cropX: c.cropX } : (cv !== fv) ? 'contain' : 'cover',
+      caption: (c.caption || '').trim(), capStart: c.capStart || 0, capDur: c.capDur || RULE.captionSec, role: 'main',
+    };
+  });
+  const main = mains[0], last = mains[mains.length - 1];
+  for (let i = 1; i < mains.length; i++) { mains[i - 1].fadeOut = 0.25; mains[i].fadeIn = 0.25; }
   const intoMain = segs.length > 0;
   if (intoMain) { if (botan) segs[segs.length - 1].wipe = true; else if (autumn && !cardOn) main.leafIn = true; else main.fadeIn = RULE.fadeInFromIvory; }
   if (opts.noMain) return { fmt, W, H, segs, clip, out };   // 스타일 맛보기: 앞부분만
-  segs.push(main);
-  if (fmt === 'v' && state.ending !== 'none') {
+  segs.push(...mains);
+  // 끝 엔딩: 시작 인트로와 따로. '없음'이면 본편이 아이보리로 조용히 끝남
+  if (state.ending !== 'none' && fmt === 'v') {
     const end = { kind: 'asset', role: 'ending', src: ASSET.ending.v };
-    if (botan) main.wipe = true; else end.xfade = RULE.shortsEndingXfade;
+    if (botan) last.wipe = true; else end.xfade = RULE.shortsEndingXfade;
     segs.push(end);
   } else {
-    main.fadeOut = RULE.fadeOutToIvory;
-    if (classic && !cardOn) segs.push({ kind: 'still', style: 'icon', role: 'ending', dur: ICON_CARD_SEC });   // 끝도 아이콘 카드로 깔끔하게 닫음
+    last.fadeOut = RULE.fadeOutToIvory;
+    if (state.ending !== 'none' && !cardOn) segs.push({ kind: 'still', style: 'icon', role: 'ending', dur: ICON_CARD_SEC });   // 가로 영상의 '토순이 엔딩' = 동그란 아이콘 카드
   }
   return { fmt, W, H, segs, clip, out };
 }
@@ -807,6 +866,31 @@ function buildPlan(clip, out, opts = {}) {
 // ================================================================ 재생/녹화 엔진
 // 타임라인은 '처음부터 몇 초'(T) 하나로 움직인다. 재생·녹화·편집 화면(멈춘 채 되감기)이 같은 그리기를 쓴다.
 let stopFlag = false;
+
+// ---------------------------------------------------------------- 빨리감기: 원본 시간(src)과 결과 시간(out) 사이 변환
+// clip.speed.ranges = [{a, b, rate}] (원본 초). 다듬은 구간(trimIn~trimOut) 안에서만 적용
+function speedPieces(clip, tin, tout) {
+  const rs = ((clip.speed && clip.speed.on !== false && clip.speed.ranges) || [])
+    .map((r) => ({ a: Math.max(tin, r.a), b: Math.min(tout, r.b), rate: r.rate || 4 }))
+    .filter((r) => r.b - r.a > 0.2 && r.rate > 1.01).sort((x, y) => x.a - y.a);
+  const pieces = []; let cur = tin, o = 0;
+  const push = (a, b, rate) => { if (b - a <= 0.001) return; pieces.push({ s0: a, s1: b, rate, o0: o }); o += (b - a) / rate; };
+  for (const r of rs) { if (r.a < cur) continue; push(cur, r.a, 1); push(r.a, r.b, r.rate); cur = r.b; }
+  push(cur, tout, 1);
+  pieces.total = Math.max(0.5, o);
+  return pieces;
+}
+function pieceAtSrc(s, src) { const P = s.pieces; if (!P || !P.length) return null; for (const p of P) if (src < p.s1) return p; return P[P.length - 1]; }
+function srcToOut(s, src) {
+  const p = pieceAtSrc(s, src); if (!p) return src - (s.trimIn || 0);
+  return p.o0 + (clamp(src, p.s0, p.s1) - p.s0) / p.rate;
+}
+function outToSrc(s, o) {
+  const P = s.pieces; if (!P || !P.length) return (s.trimIn || 0) + o;
+  let p = P[P.length - 1];
+  for (const q of P) if (o < q.o0 + (q.s1 - q.s0) / q.rate) { p = q; break; }
+  return clamp(p.s0 + (o - p.o0) * p.rate, p.s0, p.s1);
+}
 
 // 장면들의 영상을 불러오고 시작 시각을 계산 (cache를 주면 같은 영상을 다시 쓰고 소리는 끔)
 async function loadSegs(plan, cache) {
@@ -824,7 +908,9 @@ async function loadSegs(plan, cache) {
         const full = s.el.duration || s.clip.dur || 1;
         s.trimIn = clamp(s.clip.trimIn || 0, 0, Math.max(0, full - 0.5));
         const out = s.clip.trimOut > 0 ? Math.min(s.clip.trimOut, full) : full;
-        s.dur = Math.max(0.5, out - s.trimIn);
+        s.trimOut = Math.max(s.trimIn + 0.5, out);
+        s.pieces = speedPieces(s.clip, s.trimIn, s.trimOut);
+        s.dur = s.pieces.total;
       }
     }
     s.start = Math.max(0, T0 - (s.xfade || 0));
@@ -841,7 +927,7 @@ async function loadSegs(plan, cache) {
 // 장면의 '자기 시간' t
 function segTime(s, T) {
   if (s.kind === 'still') return T - s.start;
-  if (s.kind === 'clip') return s.el.currentTime - (s.trimIn || 0);
+  if (s.kind === 'clip') return srcToOut(s, s.el.currentTime);
   return s.el.currentTime;
 }
 
@@ -851,7 +937,7 @@ function paintSeg(ctx, plan, s, T, cornerImg) {
   const t = segTime(s, T);
   ctx.save();
   if (s.xfade) ctx.globalAlpha = clamp((T - s.start) / s.xfade);
-  if (s.kind === 'still') ({ autumn: drawAutumnTitle, icon: drawIconCard, minimal: drawMinimalIntro }[s.style] || drawClassicTitle)(ctx, W, H, fmt, s.text, t);
+  if (s.kind === 'still') ({ autumn: drawAutumnTitle, icon: drawIconCard, minimal: drawMinimalIntro, photo: drawPhotoIntro }[s.style] || drawClassicTitle)(ctx, W, H, fmt, s.text, t);
   else if (s.kind === 'asset') {
     if (s.el.readyState >= 2) drawAsset(ctx, s.el, W, H);
     if (s.role === 'title') drawGreenTitleText(ctx, W, H, fmt, s.text, t);
@@ -905,16 +991,20 @@ async function runPlan(plan, { record, onProgress, from = 0, until = Infinity })
   await document.fonts.load('400 40px "Noto Sans KR"', '토순이 친구' + words);
   await document.fonts.load('500 40px "Noto Sans KR"', words + '토순이 친구').catch(() => {});
   const cornerImg = state.card && fmt === 'v' ? null : await frameOverlay(fmt, W, H);
+  if (segs.some((x) => x.style === 'photo')) await withTimeout(image(FACE_SRC), 8000, '').catch(() => {});
+  let rec = null, chunks = [], mime = '';
+  const nodes = [];
+  let master = null, limiter = null;
+  try {
   await loadSegs(plan);
 
   // 오디오: 각 소스 → 음량 → 마스터 → 리미터 → 스피커(+녹음)
-  const master = ac.createGain();
-  const limiter = ac.createDynamicsCompressor();
+  master = ac.createGain();
+  limiter = ac.createDynamicsCompressor();
   limiter.threshold.value = -1.5; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.12;
   master.connect(limiter); limiter.connect(ac.destination);
   const dest = record ? ac.createMediaStreamDestination() : null;
   if (dest) limiter.connect(dest);
-  const nodes = [];
   const route = (el, gain) => {
     const src = ac.createMediaElementSource(el), g = ac.createGain();
     g.gain.value = gain; src.connect(g).connect(master); nodes.push(src, g); return g;
@@ -923,10 +1013,10 @@ async function runPlan(plan, { record, onProgress, from = 0, until = Infinity })
     if (s.kind === 'still') continue;
     let g = 1;
     if (s.kind === 'clip') {
-      const a = clip.audio;
+      const clip = s.clip, a = clip.audio;
       const useClean = (state.clean || clip.embeddedClean) && a && !a.none;
       if (useClean && a.hissOnly && state.muteHiss) g = 0;
-      else if (state.normalize) g = gainFor(useClean ? a.cleanLufs : await lufsOfUrl(clip.url));
+      else if (state.normalize) g = gainFor(useClean ? a.cleanLufs : await lufsOfUrl(s.clip.url, s.clip.origFile && s.clip.origFile.size));
       // 다듬은 소리는 따로 재생하고 영상의 원래 소리는 끈다
       if (state.clean && clip.cleanAudio) {
         s.audioEl = await makeMedia('audio', clip.cleanAudio);
@@ -934,13 +1024,13 @@ async function runPlan(plan, { record, onProgress, from = 0, until = Infinity })
       }
     } else if (state.normalize) g = gainFor(await lufsOfUrl(s.src));
     if (!s.gain) s.gain = route(s.el, g);
+    s.baseGain = g;
     if (s.wipeEl) route(s.wipeEl, 1);
   }
   const total = plan.total;
   from = clamp(from, 0, Math.max(0, total - 0.05));
   const end = Math.min(total, until);
 
-  let rec = null, chunks = [], mime = '';
   if (record) {
     if (!window.MediaRecorder) throw new Error('이 브라우저는 영상 저장을 지원하지 않아요. 컴퓨터의 크롬으로 열어 주세요.');
     const stream = screen.captureStream(30);
@@ -956,7 +1046,7 @@ async function runPlan(plan, { record, onProgress, from = 0, until = Infinity })
   for (const s of segs) {
     if (!s.el) continue;
     const off = clamp(from - s.start, 0, s.dur);
-    s.el.currentTime = (s.trimIn || 0) + off;
+    s.el.currentTime = s.kind === 'clip' ? outToSrc(s, off) : off;
     if (s.audioEl) s.audioEl.currentTime = s.el.currentTime;
     if (from >= s.start + s.dur) { s.started = s.stopped = true; }
   }
@@ -973,7 +1063,14 @@ async function runPlan(plan, { record, onProgress, from = 0, until = Infinity })
       if (stopFlag || T >= end + 0.05) { fin = true; resolve(); return; }
       lastT = Math.min(T, total);
       for (const s of segs) {
-        if (s.audioEl && s.started && !s.stopped && Math.abs(s.audioEl.currentTime - s.el.currentTime) > 0.12) s.audioEl.currentTime = s.el.currentTime;
+        if (s.audioEl && s.started && !s.stopped && Math.abs(s.audioEl.currentTime - s.el.currentTime) > 0.12 * (s.el.playbackRate || 1)) s.audioEl.currentTime = s.el.currentTime;
+        if (s.pieces && s.started && !s.stopped) {
+          const pc = pieceAtSrc(s, s.el.currentTime), r = pc ? pc.rate : 1;
+          if (Math.abs(s.el.playbackRate - r) > 0.01) {
+            s.el.playbackRate = r; if (s.audioEl) s.audioEl.playbackRate = r;
+            if (s.gain && s.baseGain != null) s.gain.gain.setTargetAtTime(s.baseGain * (r > 1.01 ? 0.3 : 1), ac.currentTime, 0.05);
+          }
+        }
         if (s.el && !s.started && T >= s.start) {
           s.started = true; play(s.el); if (s.audioEl) play(s.audioEl);
           if (s.fadeOut) s.gain.gain.setTargetAtTime(0, ac.currentTime + Math.max(0, s.start + s.dur - s.fadeOut - T), s.fadeOut / 3);
@@ -991,12 +1088,17 @@ async function runPlan(plan, { record, onProgress, from = 0, until = Infinity })
   let blob = null;
   if (rec) {
     await sleep(120);
-    const stopped = new Promise((r) => (rec.onstop = r)); rec.stop(); await stopped;
+    const stopped = new Promise((r) => (rec.onstop = r)); rec.stop(); await withTimeout(stopped, 8000, '녹화 마무리 시간 초과').catch(() => {});
+    rec = null;
     blob = new Blob(chunks, { type: (mime || 'video/webm').split(';')[0] });
   }
-  try { limiter.disconnect(); master.disconnect(); nodes.forEach((n) => n.disconnect()); } catch (e) {}
-  for (const s of segs) { dropVideo(s.el); dropVideo(s.wipeEl); dropVideo(s.audioEl); }
   return { blob, mime, total, lastT };
+  } finally {
+    // 멈추거나 오류가 나도 녹화·소리·영상을 깨끗이 정리 (다음 작업이 막히지 않게)
+    if (rec && rec.state !== 'inactive') { try { rec.stop(); } catch (e) {} }
+    try { if (limiter) limiter.disconnect(); if (master) master.disconnect(); nodes.forEach((n) => n.disconnect()); } catch (e) {}
+    for (const s of segs) { dropVideo(s.el); dropVideo(s.wipeEl); dropVideo(s.audioEl); s.el = s.wipeEl = s.audioEl = null; }
+  }
 }
 
 // ================================================================ UI
@@ -1009,24 +1111,40 @@ async function stopPreview() {
   stopFlag = true;
   while (state.running) await sleep(30);
 }
-function setupSeg(id, key) {
+function setupSeg(id, key, taste = true) {
   $(id).addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b || (state.running && !ed.playing)) return;
     (async () => {
       await stopPreview();
       state[key] = b.dataset.v; refresh();
-      tasteStyle(key, b);
+      if (key === 'join') { ed.key = ''; renderClipList(); refresh(); }
+      if (taste) tasteStyle(key, b);
     })();
   });
 }
-setupSeg('themeSeg', 'theme'); setupSeg('openingSeg', 'opening'); setupSeg('endingSeg', 'ending');
+setupSeg('themeSeg', 'theme'); setupSeg('openingSeg', 'opening'); setupSeg('openingMore', 'opening'); setupSeg('endingSeg', 'ending');
+setupSeg('openingQuick', 'opening'); setupSeg('endingQuick', 'ending'); setupSeg('joinSeg', 'join', false);
 for (const k of ['watermark', 'grade', 'frame', 'clean', 'muteHiss', 'normalize']) $(k).addEventListener('change', async (e) => { await stopPreview(); state[k] = e.target.checked; refresh(); });
 
-const paint = (id, v) => $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+const paint = (id, v) => { const el = $(id); if (el) el.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === v)); };
+function paintStyles() {
+  paint('themeSeg', state.theme); paint('openingSeg', state.opening); paint('openingMore', state.opening);
+  paint('endingSeg', state.ending); paint('openingQuick', state.opening); paint('endingQuick', state.ending); paint('joinSeg', state.join);
+  const nReady = state.clips.filter((c) => c.status === 'ready').length;
+  $('joinBar').hidden = nReady < 2;
+  if (nReady >= 2) {
+    const h = state.joinHint;
+    $('joinWhy').textContent = (state.join === 'auto'
+      ? (h ? (h.join ? '추천: 이어서 한 편. ' : '추천: 각각 한 편. ') + h.why : '영상을 살펴보는 중이에요… 그동안은 각각 한 편으로 둬요.')
+      : (state.join === 'join' ? '올린 순서대로 한 편으로 이어요. 사이는 0.25초 아이보리로 살짝 끊었다 이어요.' : '영상마다 따로 한 편씩 만들어요.'))
+      + ' (색감·장면과 찍은 시각만 보고 고른 추천이에요. 이야기가 이어지는지는 직접 확인해 주세요.)';
+  }
+  const more = $('openingMoreBox'); if (more && ['intro4s', 'official', 'botanical', 'none'].includes(state.opening)) more.open = true;
+}
 
 function refresh() {
-  paint('themeSeg', state.theme); paint('openingSeg', state.opening); paint('endingSeg', state.ending);
+  paintStyles();
   $('themeNote').textContent = {
     classic: '본편은 깨끗하게 두고, 아이보리 타이틀과 부드러운 페이드로만 이어요.',
     autumn: '크림 종이 위에 단풍잎·은행잎이 내려앉는 타이틀, 낙엽이 쏟아지며 넘어가는 전환이에요.',
@@ -1037,8 +1155,8 @@ function refresh() {
   if (state.theme === 'classic') state.frame = false;
   $('frame').checked = state.frame;
   const ready = state.clips.filter((c) => c.status === 'ready');
-  const busy = state.clips.some((c) => c.status === 'preparing');
-  $('exportBtn').disabled = state.running || !ready.length || busy;
+  const busy = state.clips.filter((c) => c.status === 'preparing' || c.status === 'loading');
+  $('exportBtn').disabled = state.running || !ready.length;
   fillPicker();
   $('stopBtn').hidden = !state.running;
   $('stageEmpty').hidden = state.clips.length > 0;
@@ -1048,10 +1166,10 @@ function refresh() {
   $('edPlay').classList.toggle('on', state.running && ed.playing);
   if (!state.running) {
     if (!state.clips.length) setStatus('영상을 올려 주세요');
-    else if (busy) setStatus('읽을 수 없는 형식이라 변환하는 중이에요. 끝나면 미리보기와 만들기를 누를 수 있어요.');
     else {
-      const n = ready.reduce((a, c) => a + outputsOf(c).length, 0);
-      setStatus(`영상 ${n}편을 만들 준비가 됐어요`);
+      const n = jobsNow().length;
+      const wait = busy.length ? ` · ${busy.length}개는 아직 여는 중/바꾸는 중 (끝나면 저절로 추가돼요)` : '';
+      setStatus(n ? `영상 ${n}편을 만들 준비가 됐어요${wait}` : `준비 중이에요${wait}`);
     }
     drawStill();
   }
@@ -1096,9 +1214,11 @@ function currentSelection() {
   const pick = state.selected && state.clips.find((c) => c.id === state.selected.clipId);
   const clip = pick || state.clips.find((c) => c.thumb && c.thumb.videoWidth);
   if (!clip) return null;
-  const outs = outputsOf(clip);
+  let outs = outputsOf(clip), c0 = clip;
+  if (!outs.length && joinOn()) { c0 = joinClips()[0]; outs = outputsOf(c0); }
   const out = (pick && outs.find((o) => o.kind === state.selected.kind)) || outs[0];
-  return { clip, out };
+  if (!out) return null;
+  return { clip: c0, out, focus: clip };
 }
 
 function renderClipList() {
@@ -1115,8 +1235,9 @@ function renderClipList() {
         <div class="meta">
           <div class="name"></div>
           <div class="sub">${fmtTime(c.dur)}${c.w ? ` · 원본 ${vertSrc ? '세로' : '가로'} ${c.w}×${c.h}` : ''}</div>
-          <div class="sub outs">${outs.map((o) => '→ ' + o.label).join('<br>')}</div>
+          <div class="sub outs">${outs.length ? outs.map((o) => '→ ' + o.label).join('<br>') : (c.status === 'ready' && joinOn() ? '→ 1번과 이어서 한 편에 들어가요' : '')}</div>
           <div class="sub warn" hidden></div>
+          <div class="sub ana">${c.ana ? esc(c.ana) : ''}</div>
         </div>
         <button class="icon-btn rm" title="빼기" aria-label="이 영상 빼기">✕</button>
       </div>
@@ -1164,6 +1285,15 @@ function renderClipList() {
     li.querySelectorAll('.f-sheet').forEach((b) => b.addEventListener('click', () => contactSheet(c, b.dataset.kind)));
     const busy = c.status !== 'ready';
     li.querySelectorAll('.f-prev').forEach((b) => { b.disabled = busy || state.running; });
+    // 카드를 누르면 오른쪽(휴대폰은 아래) 미리보기에 그 영상이 열림
+    const cur = currentSelection();
+    li.classList.toggle('is-sel', !!cur && cur.clip === c);
+    li.classList.toggle('is-failed', c.status === 'failed');
+    li.addEventListener('click', (e) => {
+      if (e.target.closest('input,button,select,textarea,label,a') || c.status !== 'ready' || (state.running && !ed.playing)) return;
+      select(c, (state.selected && state.selected.clipId === c.id && state.selected.kind) || 'main');
+      ul.querySelectorAll('.clip-card').forEach((x) => x.classList.toggle('is-sel', x === li));
+    });
     ul.append(li);
   });
 }
@@ -1199,21 +1329,38 @@ async function contactSheet(c, kind) {
 }
 function select(c, kind) { state.selected = { clipId: c.id, kind }; drawStill(); }
 
+// 올리면 목록에 바로 보이고(여는 중), 각자 따로 열림. 한 파일이 실패해도 나머지는 그대로 씀
 async function addFiles(files) {
-  const list = [...files].filter((f) => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name));
-  for (const file of list) {
-    const url = URL.createObjectURL(file);
-    let v;
-    try { v = await makeVideo(url, { muted: true }); }
-    catch (e) { URL.revokeObjectURL(url); setStatus(`"${file.name}"을(를) 열지 못했어요.`); continue; }
-    v.currentTime = Math.min(1, (v.duration || 2) / 3);
-    await new Promise((r) => { v.onseeked = r; setTimeout(r, 1500); });
-    const clip = { id: ++clipSeq, origFile: file, url, name: file.name, w: v.videoWidth, h: v.videoHeight, dur: v.duration, thumb: v,
-      title: '', caption: '', cropShorts: false, cropX: 0.5, capStart: 0, capDur: RULE.captionSec, trimIn: 0, trimOut: 0,
-      // 원본이 재생되면 바로 쓸 수 있음. 소리 다듬기는 뒤에서.
-      status: v.videoWidth ? 'ready' : 'preparing', note: '소리 다듬기 순서를 기다리는 중…' };
+  const list = [...files].filter((f) => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|mkv|hevc)$/i.test(f.name));
+  if (!list.length) { setStatus('영상 파일만 올릴 수 있어요'); return; }
+  const added = list.map((file) => {
+    const clip = { id: ++clipSeq, origFile: file, url: URL.createObjectURL(file), name: file.name, w: 0, h: 0, dur: 0, thumb: null,
+      title: '', caption: '', cropShorts: false, cropX: 0.5, capStart: 0, capDur: RULE.captionSec, trimIn: 0, trimOut: 0, speed: null,
+      status: 'loading', note: '여는 중…' };
     state.clips.push(clip);
-    clip.prepDone = prepQueue = prepQueue.then(() => prepareClip(clip)).catch((e) => console.error(e));
+    return clip;
+  });
+  renderClipList(); refresh();
+  await Promise.all(added.map(openClip));
+  // 소리 다듬기·형식 변환은 뒤에서 한 편씩. 바로 열리는 영상을 먼저 (오래 걸리는 변환이 다른 영상을 막지 않게)
+  const order = added.filter((c) => c.status !== 'failed').sort((x, y) => (x.status === 'ready' ? 0 : 1) - (y.status === 'ready' ? 0 : 1));
+  for (const c of order) {
+    if (c.status === 'ready') setClipNote(c, '소리 다듬기 순서를 기다리는 중… (기다리지 않고 바로 만들어도 돼요)');
+    c.prepDone = prepQueue = prepQueue.then(() => prepareClip(c)).catch((e) => console.error(e));
+  }
+  renderClipList(); refresh();
+  autoAnalyze(added.filter((c) => c.status === 'ready'));
+}
+async function openClip(clip) {
+  try {
+    const v = await makeVideo(clip.url, { muted: true });
+    if (!state.clips.includes(clip)) { dropVideo(v); return; }
+    await seekTo(v, Math.min(1, (v.duration || 2) / 3));
+    Object.assign(clip, { w: v.videoWidth, h: v.videoHeight, dur: v.duration, thumb: v, status: v.videoWidth ? 'ready' : 'preparing',
+      note: v.videoWidth ? '' : '이 브라우저가 바로 못 읽는 형식(HEVC)이라 바꾸는 중이에요. 다른 영상은 먼저 고치고 만들 수 있어요.' });
+  } catch (e) {
+    console.error(e);
+    Object.assign(clip, { status: 'failed', note: `열지 못했어요 (${e.message}). 빼고 다른 영상으로 계속할 수 있어요.` });
   }
   renderClipList(); refresh();
 }
@@ -1226,9 +1373,13 @@ drop.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
 async function withRun(fn) {
   if (state.running) return;
   state.running = true; stopFlag = false; refresh(); renderClipList();
+  let err = null;
   try { await fn(); }
-  catch (e) { console.error(e); setStatus('문제가 생겼어요: ' + (e.message || e)); }
-  finally { state.running = false; renderClipList(); refresh(); }
+  catch (e) { console.error(e); err = e; }
+  finally {
+    state.running = false; stopFlag = false; renderClipList(); refresh();
+    if (err) setStatus('문제가 생겼어요: ' + (err.message || err) + ' · 버튼은 다시 쓸 수 있어요.');
+  }
 }
 
 function preview(clip, kind) {
@@ -1238,11 +1389,22 @@ function preview(clip, kind) {
 }
 
 const results = [];
+// 올린 뒤 자동 분석 (빨리감기 후보·이어 붙이기 추천) — 아래 '자동 편집 제안'에서 채움
+function autoAnalyze(clips) { if (typeof analyzeClips === 'function') analyzeClips(clips).catch((e) => console.error(e)); }
+// 지금 만들 수 있는 결과물 목록
+function jobsNow() {
+  const jobs = [];
+  for (const c of state.clips.filter((x) => x.status === 'ready')) for (const o of outputsOf(c)) jobs.push({ c, o });
+  return jobs;
+}
 // 한 편 만들기 (녹화). 같은 결과가 이미 있으면 새것으로 바꿔 끼움
 async function makeOne(c, o, label) {
   if (state.clean && !c.prepFinished) {
-    setStatus(`${c.name} 소리 다듬기가 끝나길 기다리는 중…`);
-    await Promise.race([c.prepDone, sleep(5 * 60 * 1000)]);
+    // 소리 다듬기를 최대 20초만 기다리고, 안 끝나면 원래 소리로 만듦 (멈춰 서 있지 않게)
+    setStatus(`${c.name} 소리 다듬기를 잠깐 기다리는 중… (20초 안에 안 끝나면 원래 소리로 만들어요)`);
+    let waiting = true;
+    await Promise.race([c.prepDone, sleep(20000), (async () => { while (waiting && !stopFlag) await sleep(200); })()]);
+    waiting = false;
     if (stopFlag) return false;
   }
   state.selected = { clipId: c.id, kind: o.kind };
@@ -1253,18 +1415,18 @@ async function makeOne(c, o, label) {
   return true;
 }
 $('exportBtn').addEventListener('click', () => withRun(async () => {
-  const jobs = [];
-  for (const c of state.clips.filter((x) => x.status === 'ready')) for (const o of outputsOf(c)) jobs.push({ c, o });
+  const jobs = jobsNow();
   $('studio').scrollIntoView({ behavior: 'smooth', block: 'start' });
   let done = 0;
   for (let j = 0; j < jobs.length && !stopFlag; j++) if (await makeOne(jobs[j].c, jobs[j].o, `${j + 1}/${jobs.length}편 만드는 중`)) done++;
   setBar(stopFlag ? 0 : 1);
+  if (stopFlag) setTimeout(() => setStatus(`멈췄어요. ${done}편은 아래에 있어요. 고친 뒤 '이 편 만들기'나 '전부 만들기'를 다시 눌러 주세요.`), 0);
   if (!stopFlag && jobs.length) {
     state.selected = { clipId: jobs[0].c.id, kind: jobs[0].o.kind }; ed.key = '';
     setTimeout(() => setStatus(`완성! ${done}편이 아래에 있어요. 고칠 곳이 있으면 위에서 바로 고치고 '이 편 다시 만들기'를 눌러 주세요.`), 0);
   }
 }));
-$('stopBtn').addEventListener('click', () => { stopFlag = true; });
+$('stopBtn').addEventListener('click', () => { stopFlag = true; setStatus('멈추는 중… 멈추면 바로 고칠 수 있어요'); });
 
 // 3번 칸의 '어떤 영상을 볼지' 고르기 + 미리보기
 function fillPicker() {
@@ -1290,7 +1452,7 @@ $('previewBtn').addEventListener('click', () => {
 function addResult(c, o, { blob, mime }) {
   const isMp4 = (mime || '').startsWith('video/mp4');
   const base = c.name.replace(/\.\w+$/, '');
-  const name = `tosooni-${base}-${o.kind === 'crop' ? 'crop-shorts' : o.fmt === 'v' ? 'shorts' : 'video'}.${isMp4 ? 'mp4' : 'webm'}`;
+  const name = `tosooni-${base}-${o.kind === 'joined' ? 'joined-' : ''}${o.kind === 'crop' ? 'crop-shorts' : o.fmt === 'v' ? 'shorts' : 'video'}.${isMp4 ? 'mp4' : 'webm'}`;
   const url = URL.createObjectURL(blob);
   results.push({ name, url });
   const ul = $('results'); ul.hidden = false;
@@ -1339,6 +1501,13 @@ const ed = { plan: null, key: '', T: 0, cache: new Map(), busy: false, pending: 
 const fmt1 = (s) => { s = Math.max(0, s || 0); const m = Math.floor(s / 60), r = s - m * 60; return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1); };
 const ROLE_LABEL = { opening: '오프닝', title: '제목', pause: '쉼표', main: '본편', ending: '마무리' };
 const mainOf = (plan) => plan && plan.segs.find((x) => x.kind === 'clip');
+// 재생 위치에 있는 본편 영상 (이어 붙인 편이면 그 자리의 영상, 본편 밖이면 가장 가까운 영상)
+function clipSegAt(plan, T) {
+  if (!plan) return null;
+  const cs = plan.segs.filter((x) => x.kind === 'clip'); if (!cs.length) return null;
+  return cs.find((x) => T >= x.start && T < x.start + x.dur) || (T < cs[0].start ? cs[0] : cs.find((x) => T < x.start) || cs[cs.length - 1]);
+}
+const segOfClip = (plan, c) => plan && plan.segs.find((x) => x.kind === 'clip' && x.clip === c);
 
 function seekTo(v, t) {
   return new Promise((r) => {
@@ -1378,15 +1547,22 @@ async function edBuild() {
 function edTimeline() {
   const p = ed.plan; if (!p) return;
   const tot = p.total || 1, pct = (x) => (x / tot * 100).toFixed(3) + '%';
+  const nClips = p.segs.filter((x) => x.kind === 'clip').length;
+  let ci = 0;
   $('tlBands').innerHTML = p.segs.map((x) => {
     const role = x.role || (x.kind === 'clip' ? 'main' : 'title');
-    return `<div class="band b-${role}" style="left:${pct(x.start)};width:${pct(x.dur)}"><span>${ROLE_LABEL[role] || ''}</span></div>`;
+    const label = x.kind === 'clip' && nClips > 1 ? `본편 ${++ci}` : (ROLE_LABEL[role] || '');
+    let spd = '';
+    if (x.pieces) for (const pc of x.pieces) if (pc.rate > 1.01) {
+      const w = (pc.s1 - pc.s0) / pc.rate;
+      spd += `<div class="spd" style="left:${(pc.o0 / x.dur * 100).toFixed(3)}%;width:${(w / x.dur * 100).toFixed(3)}%"><b>×${pc.rate}</b></div>`;
+    }
+    return `<div class="band b-${role}" style="left:${pct(x.start)};width:${pct(x.dur)}"><span>${label}</span>${spd}</div>`;
   }).join('');
-  const m = mainOf(p), cap = $('tlCap');
-  if (m && m.caption && !m.card) {
+  $('tlCaps').innerHTML = p.segs.filter((m) => m.kind === 'clip' && m.caption && !m.card).map((m) => {
     const a = m.start + (m.capStart || 0), d = Math.min(m.capDur || RULE.captionSec, m.start + m.dur - a);
-    cap.hidden = d <= 0; cap.style.left = pct(a); cap.style.width = pct(Math.max(0, d));
-  } else cap.hidden = true;
+    return d > 0 ? `<div class="cap" style="left:${pct(a)};width:${pct(d)}"><span>자막</span></div>` : '';
+  }).join('');
   const step = tot > 120 ? 30 : tot > 60 ? 10 : tot > 20 ? 5 : 2;
   let h = '';
   for (let x = 0; x <= tot + 0.001; x += step) h += `<span style="left:${pct(x)}">${fmtTime(x)}</span>`;
@@ -1413,6 +1589,7 @@ function edSeek(T) {
   if (!ed.plan) return;
   ed.T = clamp(T, 0, Math.max(0, ed.plan.total - 0.04));
   edHead();
+  const ac = selClip(); if (ac !== ed.activeClip) { ed.activeClip = ac; const s0 = currentSelection(); if (s0) edInspector(s0); }
   ed.pending = ed.T;
   if (!ed.busy) edPump();
 }
@@ -1425,7 +1602,7 @@ async function edPaint(T) {
   const p = ed.plan; if (!p || state.running) return;
   const last = p.segs[p.segs.length - 1], waits = [];
   for (const x of p.segs) {
-    if (x.el && T >= x.start - 0.01 && (T < x.start + x.dur || x === last)) waits.push(seekTo(x.el, (x.trimIn || 0) + clamp(T - x.start, 0, x.dur - 0.04)));
+    if (x.el && T >= x.start - 0.01 && (T < x.start + x.dur || x === last)) waits.push(seekTo(x.el, x.kind === 'clip' ? outToSrc(x, clamp(T - x.start, 0, x.dur - 0.04)) : clamp(T - x.start, 0, x.dur - 0.04)));
     if (x.wipeEl && T >= x.wipeAt && T < x.wipeAt + (x.wipeEl.duration || 2)) waits.push(seekTo(x.wipeEl, T - x.wipeAt));
   }
   await Promise.all(waits);
@@ -1465,14 +1642,15 @@ document.addEventListener('keydown', (e) => {
 });
 
 // 고친 뒤 다시 짜서 보여 주기. focus: 보여 줄 곳('title' | 'caption' | 'trimIn' | 'trimOut' | 'keep')
-let edTimer = 0;
+let edTimer = 0, edFocusClip = null;
 function edChanged(focus, delay = 220) {
   clearTimeout(edTimer);
+  edFocusClip = selClip();
   edTimer = setTimeout(async () => {
     syncClipCards();
     const p = await (ed.ready = edBuild());
     if (!p) return;
-    const m = mainOf(p), ti = p.segs.find((x) => x.role === 'title');
+    const m = segOfClip(p, edFocusClip) || mainOf(p), ti = p.segs.find((x) => x.role === 'title');
     let T = ed.T;
     if (focus === 'title') T = ti ? ti.start + Math.min(2.0, ti.dur * 0.6) : (m ? m.start + 0.5 : 0);
     else if (focus === 'caption' && m) T = m.start + (m.capStart || 0) + 1.2;
@@ -1490,12 +1668,15 @@ function syncClipCards() {
   set('.f-title', c.title || ''); set('.f-cap', c.caption || '');
   set('.f-cropx', c.cropX); set('.f-cropn', Math.round(c.cropX * 100));
 }
-const selClip = () => { const s = currentSelection(); return s && s.clip; };
+const selClip = () => { const m = clipSegAt(ed.plan, ed.T); if (m) return m.clip; const s = currentSelection(); return s && s.clip; };
 
 function edInspector(sel) {
-  const c = sel.clip, m = mainOf(ed.plan);
+  const c = selClip() || sel.clip, m = segOfClip(ed.plan, c);
   const put = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = v; };
-  put('edTitle', c.title || ''); put('edCap', c.caption || '');
+  put('edTitle', sel.clip.title || ''); put('edCap', c.caption || '');
+  const multi = ed.plan && ed.plan.segs.filter((x) => x.kind === 'clip').length > 1;
+  $('edWhich').hidden = !multi;
+  if (multi) $('edWhich').textContent = `지금 고치는 영상: ${state.clips.indexOf(c) + 1}. ${c.name} · 자막·다듬기·빨리감기는 이 영상에만 적용돼요`;
   put('edCapDur', c.capDur || RULE.captionSec);
   $('edCapAt').textContent = (c.capStart || 0).toFixed(1);
   $('edTitle').placeholder = state.card && sel.out.fmt === 'v' ? '카드 맨 위 제목 · 예) 강아지를 만난 토끼' : '예) 오늘은 산책하러 가는 날';
@@ -1508,6 +1689,7 @@ function edInspector(sel) {
   $('trimInfo').textContent = `${fmt1(a)} – ${fmt1(b)} · ${(b - a).toFixed(1)}초`;
   $('trimReset').hidden = !(a > 0 || c.trimOut > 0);
   drawStrip(c);
+  speedUI(c);
   // 크롭
   const crop = sel.out.kind === 'crop';
   $('edCropRow').hidden = !crop;
@@ -1548,15 +1730,15 @@ function paintStrip(c) {
   }
 }
 
-$('edTitle').addEventListener('input', (e) => { const c = selClip(); if (!c) return; c.title = e.target.value; edChanged('title'); });
+$('edTitle').addEventListener('input', (e) => { const s = currentSelection(); if (!s) return; s.clip.title = e.target.value; edChanged('title'); });
 $('edCap').addEventListener('input', (e) => { const c = selClip(); if (!c) return; c.caption = e.target.value; edChanged('caption'); });
 $('edCapDur').addEventListener('change', (e) => { const c = selClip(); if (!c) return; c.capDur = clamp(+e.target.value || RULE.captionSec, 1, 12); edChanged('caption', 0); });
 $('edCapHere').addEventListener('click', () => {
-  const c = selClip(), m = mainOf(ed.plan); if (!c || !m) return;
+  const c = selClip(), m = segOfClip(ed.plan, c); if (!c || !m) return;
   c.capStart = clamp(ed.T - m.start, 0, Math.max(0, m.dur - 1));
   edChanged('caption', 0);
 });
-const srcAt = () => { const m = mainOf(ed.plan); return m ? (m.trimIn || 0) + clamp(ed.T - m.start, 0, m.dur) : 0; };
+const srcAt = () => { const m = clipSegAt(ed.plan, ed.T); return m ? outToSrc(m, clamp(ed.T - m.start, 0, m.dur)) : 0; };
 function setTrim(c, a, b) {
   const dur = c.dur || 1;
   a = clamp(a, 0, dur - 0.5); b = clamp(b, a + 0.5, dur);
@@ -1577,6 +1759,159 @@ $('edMake').addEventListener('click', () => {
   });
 });
 window.addEventListener('resize', () => { const s = currentSelection(); if (s && !$('editor').hidden) paintStrip(s.clip); });
+
+// ================================================================ 자동 편집 제안 (시험): 지루한 대기 구간 빨리감기 · 이어 붙이기 추천
+// 움직임만 재서 '오래 거의 안 움직이는 구간'을 빨리감기 후보로 둡니다. 표정·긴장감 같은 의미는 모르니, 앞 1.5초는 원래 속도로 남기고
+// 6초 이상 이어질 때만 제안해요. 언제든 지우거나 속도를 바꾸고, '모두 원래 속도'로 되돌릴 수 있어요.
+const SPEED_RULE = { minStill: 6, keepHead: 1.5, keepTail: 1.0, minLen: 3.5 };
+function fmtS(x) { return fmt1(x); }
+function speedUI(c) {
+  const list = $('spdList'), sp = c.speed;
+  const rs = (sp && sp.ranges) || [];
+  list.innerHTML = rs.length ? '' : '<span class="insp-sub" style="margin:0">빨리감기 구간이 없어요.</span>';
+  rs.forEach((r, i) => {
+    const el = document.createElement('span'); el.className = 'spd-chip' + (r.auto ? ' auto' : '');
+    el.innerHTML = `<span>${fmtS(r.a)}–${fmtS(r.b)}</span><select aria-label="속도">${[2, 4, 8].map((x) => `<option value="${x}" ${x === r.rate ? 'selected' : ''}>×${x}</option>`).join('')}</select><button type="button" aria-label="이 구간 지우기">✕</button>`;
+    el.querySelector('select').addEventListener('change', (e) => { r.rate = +e.target.value; r.auto = false; edChanged('keep', 0); });
+    el.querySelector('button').addEventListener('click', () => { rs.splice(i, 1); edChanged('keep', 0); });
+    el.addEventListener('click', (e) => { if (e.target.closest('select,button')) return; const m = segOfClip(ed.plan, c); if (m) edSeek(m.start + srcToOut(m, r.a) - 0.5); });
+    list.append(el);
+  });
+  const note = $('spdNote');
+  if (c.anaBusy) note.textContent = '움직임을 살펴보는 중이에요…';
+  else if (ed.spdFrom != null && ed.spdFromClip === c) note.textContent = `${fmtS(ed.spdFrom)}부터 표시했어요. 끝낼 곳으로 가서 '여기까지 빨리감기'를 눌러 주세요.`;
+  else if (rs.some((r) => r.auto)) note.textContent = '점선 구간은 자동 제안이에요. 움직임이 적은 곳만 골랐어요. 표정이 중요한 장면이면 ✕로 지워 주세요.';
+  else note.textContent = '';
+}
+function addSpeedRange(c, a, b, rate) {
+  if (b - a < 0.5) return;
+  c.speed = c.speed || { ranges: [] };
+  c.speed.ranges = c.speed.ranges.filter((r) => r.b <= a || r.a >= b);   // 겹치면 새것으로
+  c.speed.ranges.push({ a, b, rate, auto: false });
+  c.speed.ranges.sort((x, y) => x.a - y.a);
+  c.speed.user = true;
+}
+$('spdFrom').addEventListener('click', () => { const c = selClip(); if (!c) return; ed.spdFrom = srcAt(); ed.spdFromClip = c; speedUI(c); });
+$('spdTo').addEventListener('click', () => {
+  const c = selClip(); if (!c) return;
+  const here = srcAt();
+  if (ed.spdFrom == null || ed.spdFromClip !== c) { ed.spdFrom = here; ed.spdFromClip = c; speedUI(c); return; }
+  addSpeedRange(c, Math.min(ed.spdFrom, here), Math.max(ed.spdFrom, here), +$('spdRate').value);
+  ed.spdFrom = null; edChanged('keep', 0);
+});
+$('spdOff').addEventListener('click', () => { const c = selClip(); if (!c) return; c.speed = { ranges: [], user: true }; ed.spdFrom = null; edChanged('keep', 0); });
+$('spdAuto').addEventListener('click', async () => {
+  const c = selClip(); if (!c || c.anaBusy) return;
+  if (c.speed) c.speed.user = false;
+  await analyzeOne(c, true); edChanged('keep', 0);
+});
+
+// 영상을 빠르게(8배) 소리 없이 훑으며 작은 화면끼리 차이를 잼
+async function motionProfile(c) {
+  const v = await makeVideo(c.url, { muted: true });
+  const w = 48, h = Math.max(8, Math.round(48 * c.h / c.w));
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d', { willReadFrequently: true });
+  const pts = []; let prev = null, first = null, lastImg = null;
+  const grab = (t) => {
+    g.drawImage(v, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data;
+    const lum = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) lum[i] = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
+    if (prev) { let s = 0; for (let i = 0; i < lum.length; i++) s += Math.abs(lum[i] - prev[i]); pts.push({ t, d: s / lum.length }); }
+    prev = lum; if (!first) first = new Uint8ClampedArray(d); lastImg = new Uint8ClampedArray(d);
+  };
+  const dur = c.dur || v.duration;
+  v.playbackRate = 8;
+  let ok = false;
+  try { await withTimeout(v.play(), 4000, 'play'); ok = !v.paused; } catch (e) { ok = false; }
+  if (ok) {
+    const until = performance.now() + (dur / 8 + 15) * 1000;
+    await new Promise((res) => {
+      let lastT = -1;
+      const step = () => {
+        if (v.ended || performance.now() > until || !state.clips.includes(c)) return res();
+        if (v.readyState >= 2 && v.currentTime !== lastT) { lastT = v.currentTime; grab(v.currentTime); }
+        requestAnimationFrame(step);
+      };
+      step();
+    });
+    v.pause();
+  }
+  if (pts.length < Math.min(10, dur * 2)) {   // 재생이 안 되면 0.5초 간격으로 건너뛰며 (최대 240장)
+    pts.length = 0; prev = null;
+    const n = Math.min(240, Math.max(4, Math.floor(dur * 2)));
+    for (let i = 0; i < n; i++) { await seekTo(v, dur * i / n); grab(dur * i / n); }
+  }
+  dropVideo(v);
+  return { pts, first, last: lastImg, w, h };
+}
+function stillRanges(pts, dur) {
+  if (pts.length < 8) return [];
+  const bin = 0.5, nb = Math.ceil(dur / bin), sum = new Float32Array(nb), cnt = new Float32Array(nb);
+  for (const p of pts) { const i = Math.min(nb - 1, Math.floor(p.t / bin)); sum[i] += p.d; cnt[i]++; }
+  const m = []; for (let i = 0; i < nb; i++) m.push(cnt[i] ? sum[i] / cnt[i] : NaN);
+  for (let i = 0; i < nb; i++) if (isNaN(m[i])) m[i] = i ? m[i - 1] : 0;
+  const sm = m.map((_, i) => (m[Math.max(0, i - 1)] + m[i] + m[Math.min(nb - 1, i + 1)]) / 3);
+  const sorted = [...sm].sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)];
+  const thr = Math.min(Math.max(1.2, med * 0.45), 4.0);   // 거의 안 움직임
+  const out = []; let st = -1;
+  for (let i = 0; i <= nb; i++) {
+    const still = i < nb && sm[i] < thr;
+    if (still && st < 0) st = i;
+    if (!still && st >= 0) {
+      const a = st * bin, b = Math.min(dur, i * bin);
+      if (b - a >= SPEED_RULE.minStill) {
+        const ra = a + SPEED_RULE.keepHead, rb = b - SPEED_RULE.keepTail;
+        if (rb - ra >= SPEED_RULE.minLen) out.push({ a: +ra.toFixed(2), b: +rb.toFixed(2), rate: rb - ra > 20 ? 8 : 4, auto: true });
+      }
+      st = -1;
+    }
+  }
+  return out;
+}
+function hist(d) {
+  const H = new Float32Array(64); let n = 0;
+  for (let i = 0; i < d.length; i += 4) { H[(d[i] >> 6) * 16 + (d[i + 1] >> 6) * 4 + (d[i + 2] >> 6)]++; n++; }
+  for (let i = 0; i < 64; i++) H[i] /= n || 1; return H;
+}
+const histSim = (a, b) => { let s = 0; for (let i = 0; i < 64; i++) s += Math.min(a[i], b[i]); return s; };
+async function analyzeOne(c, force) {
+  c.anaBusy = true; c.ana = '움직임 살펴보는 중…'; renderClipList();
+  const s0 = currentSelection(); if (s0 && selClip() === c) speedUI(c);
+  try {
+    const prof = await motionProfile(c);
+    c.firstHist = prof.first ? hist(prof.first) : null; c.lastHist = prof.last ? hist(prof.last) : null;
+    const rs = stillRanges(prof.pts, c.dur);
+    if (force || !(c.speed && c.speed.user)) c.speed = { ranges: rs, auto: true };
+    const tot = rs.reduce((a, r) => a + (r.b - r.a), 0);
+    c.ana = rs.length ? `빨리감기 제안 ${rs.length}곳 (${tot.toFixed(0)}초 → ${rs.reduce((a, r) => a + (r.b - r.a) / r.rate, 0).toFixed(0)}초)` : '빨리감기할 만큼 긴 대기 구간은 없어요';
+  } catch (e) { console.error(e); c.ana = '움직임을 살펴보지 못했어요 (그대로 써도 돼요)'; }
+  c.anaBusy = false;
+}
+function computeJoinHint() {
+  const cs = state.clips.filter((c) => c.status === 'ready');
+  if (cs.length < 2) { state.joinHint = null; return; }
+  if (cs.some((c) => !c.firstHist)) { state.joinHint = null; return; }
+  const sims = [], gaps = [];
+  for (let i = 1; i < cs.length; i++) {
+    sims.push(histSim(cs[i - 1].lastHist, cs[i].firstHist));
+    const ta = cs[i - 1].origFile && cs[i - 1].origFile.lastModified, tb = cs[i].origFile && cs[i].origFile.lastModified;
+    gaps.push(ta && tb ? Math.abs(tb - ta) / 60000 : null);
+  }
+  const minSim = Math.min(...sims), knownGaps = gaps.filter((g) => g != null), maxGap = knownGaps.length ? Math.max(...knownGaps) : null;
+  const sameDir = cs.every((c) => (c.h > c.w) === (cs[0].h > cs[0].w));
+  const join = minSim >= 0.62 && (maxGap == null || maxGap <= 120) && sameDir;
+  const bits = [`앞 영상 끝과 다음 영상 시작의 색감·장면 비슷함 ${Math.round(minSim * 100)}%`];
+  if (maxGap != null) bits.push(maxGap < 1 ? '파일 시각 차이 1분 안' : `파일 시각 차이 최대 ${Math.round(maxGap)}분`);
+  if (!sameDir) bits.push('가로·세로가 섞여 있음');
+  state.joinHint = { join, why: bits.join(' · ') + '.' };
+}
+async function analyzeClips(clips) {
+  for (const c of clips) { if (state.clips.includes(c) && c.status === 'ready') await analyzeOne(c, false); }
+  computeJoinHint();
+  renderClipList(); refresh();
+}
 
 // ================================================================ 스타일 고르기: 버튼마다 실제 모습 썸네일, 누르면 그 부분을 바로 재생
 const SAMPLE_TITLE = '산책하러 가는 날';
@@ -1607,14 +1942,16 @@ async function buildSwatches() {
   await shot(btn('themeSeg', 'classic'), (g, w, h) => drawClassicTitle(g, w, h, 'h', SAMPLE_TITLE, 2.2));
   await shot(btn('themeSeg', 'autumn'), (g, w, h) => drawAutumnTitle(g, w, h, 'h', SAMPLE_TITLE, 2.4));
   await shot(btn('themeSeg', 'botanical'), frameOf(ASSET.greenTitle.h, 2.6, SAMPLE_TITLE));
-  await shot(btn('openingSeg', 'minimal'), (g, w, h) => drawMinimalIntro(g, w, h, 'h', '', 2.3));
-  await shot(btn('openingSeg', 'intro4s'), frameOf(ASSET.opening.intro4s.h, 3.2));
-  await shot(btn('openingSeg', 'official'), frameOf(ASSET.opening.official.h, 10.0));
-  await shot(btn('openingSeg', 'botanical'), frameOf(ASSET.opening.botanical.h, 3.2));
-  await shot(btn('openingSeg', 'none'), (g, w, h) => { g.strokeStyle = '#D8D1C4'; g.lineWidth = 3; g.beginPath(); g.moveTo(w * 0.44, h / 2); g.lineTo(w * 0.56, h / 2); g.stroke(); });
+  await withTimeout(image(FACE_SRC), 8000, '').catch(() => {});
+  await shot(btn('openingSeg', 'photo'), (g, w, h) => drawPhotoIntro(g, w, h, 'h', '', 0.6));
+  await shot(btn('openingSeg', 'minimal'), (g, w, h) => drawMinimalIntro(g, w, h, 'h', '', 1.7));
+  await shot(btn('openingMore', 'intro4s'), frameOf(ASSET.opening.intro4s.h, 3.2));
+  await shot(btn('openingMore', 'official'), frameOf(ASSET.opening.official.h, 10.0));
+  await shot(btn('openingMore', 'botanical'), frameOf(ASSET.opening.botanical.h, 3.2));
+  await shot(btn('openingMore', 'none'), (g, w, h) => { g.strokeStyle = '#D8D1C4'; g.lineWidth = 3; g.beginPath(); g.moveTo(w * 0.44, h / 2); g.lineTo(w * 0.56, h / 2); g.stroke(); });
   await shot(btn('endingSeg', 'shorts'), async (g, w, h) => { const v = await makeVideo(ASSET.ending.v, { muted: true }); await seekTo(v, 1.6); await frameReady(v); drawAsset(g, v, w, h); dropVideo(v); }, true);
   await shot(btn('endingSeg', 'none'), (g, w, h) => { g.strokeStyle = '#D8D1C4'; g.lineWidth = 4; g.beginPath(); g.moveTo(w * 0.4, h / 2); g.lineTo(w * 0.6, h / 2); g.stroke(); }, true);
-  paint('themeSeg', state.theme); paint('openingSeg', state.opening); paint('endingSeg', state.ending);
+  paintStyles();
 }
 setTimeout(() => buildSwatches().catch((e) => console.error(e)), 300);
 
