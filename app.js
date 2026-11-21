@@ -29,7 +29,7 @@ const ASSET = {
   greenTitle: { h: A + 'title-16x9.mp4', v: A + 'title-9x16.mp4' },
   corner: { h: A + 'frame-corner-16x9.png', v: A + 'frame-corner-9x16.png' },
   wipe: { h: A + 'leaf-wipe-16x9.mp4', v: A + 'leaf-wipe-9x16.mp4', cut: 0.7 },
-  ending: { v: A + 'ending-9x16.mp4' },
+  ending: { v: A + 'ending-paper-9x16.mp4', h: A + 'ending-paper-16x9.mp4' },   // 종이 토순이만 남기고 정리한 엔딩 (원본: ending-9x16.mp4)
 };
 const pickSrc = (e, fmt) => e[fmt] || e.h || e.v;
 
@@ -39,7 +39,7 @@ const state = {
   theme: 'classic',
   join: 'auto', joinHint: null,   // 여러 영상: 자동 추천 / 각각 / 이어서
   opening: 'photo',     // 시작 인트로: 동그란 실제 사진 1.1초 (기본)
-  ending: 'none',       // 끝 엔딩은 시작과 따로. 기본은 없음
+  ending: 'none',       // 끝 엔딩은 시작과 따로. 'none' | 'shorts'(종이 토순이 엔딩) | 'words'(또 만나요 글자 카드). 기본은 없음
   watermark: true, grade: true, frame: false,
   clean: true, muteHiss: true, normalize: true,
   running: false,
@@ -425,6 +425,34 @@ function drawEndCard(ctx, W, H, fmt, text, t) {
     ctx.globalAlpha = ba; const px = 18 * k;
     setFont(ctx, 300, px, px * 0.6); ctx.fillStyle = '#BFA373';
     centerText(ctx, 'TOSOONI', cx, H - (vert ? 170 : 90) * k, px * 0.6);
+  }
+  ctx.restore(); resetFont(ctx);
+}
+
+// 끝 엔딩 조각. 'shorts' = 종이 토순이(쏙 올라와 눈 깜빡) + 위에 또렷한 TOSOONI 글자, 'words' = 또 만나요 글자 카드
+function endingSeg(fmt) {
+  if (state.ending === 'words') return { kind: 'still', style: 'end', role: 'ending', dur: ENDING_SEC };
+  if (state.ending === 'shorts') return { kind: 'asset', role: 'ending', src: fmt === 'v' ? ASSET.ending.v : ASSET.ending.h, header: true };
+  return null;
+}
+// 종이 토순이 엔딩 위 글자: TOSOONI · 골드 가는 선과 작은 하트 · 토순이 친구, 그리고 토순이가 서 있는 골드 바닥선
+function drawEndHeader(ctx, W, H, fmt, t) {
+  const v = fmt === 'v', k = v ? 1 : 0.8, cx = W / 2;
+  const y0 = v ? 470 : 150, ground = v ? 1330 : 880, gx = v ? 543 : 960;
+  ctx.save(); ctx.textBaseline = 'alphabetic';
+  const ga = ease(prog(t, 0.0, 0.5));
+  if (ga > 0) { ctx.globalAlpha = ga; ctx.strokeStyle = 'rgba(191,163,115,0.8)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(gx - 300 * k, ground + 0.5); ctx.lineTo(gx + 300 * k, ground + 0.5); ctx.stroke(); }
+  const a = ease(prog(t, 0.35, 0.95));
+  if (a > 0) {
+    ctx.globalAlpha = a;
+    let px = 58 * k; setFont(ctx, 300, px, px * 0.38); ctx.fillStyle = '#2F2E2B';
+    centerText(ctx, 'TOSOONI', cx, y0 + (1 - a) * 6, px * 0.38);
+    const ly = y0 + 40 * k, hw = 54 * k * easeOut(prog(t, 0.55, 1.2));
+    ctx.strokeStyle = '#BFA373'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(cx - hw - 14 * k, ly); ctx.lineTo(cx - 14 * k, ly); ctx.moveTo(cx + 14 * k, ly); ctx.lineTo(cx + hw + 14 * k, ly); ctx.stroke();
+    ctx.fillStyle = '#E8A3AE'; heartPath(ctx, cx, ly, 6 * k); ctx.fill();
+    px = 24 * k; setFont(ctx, 400, px, px * 0.3); ctx.fillStyle = '#8A8279';
+    centerText(ctx, '토순이 친구', cx, ly + 50 * k, px * 0.3);
   }
   ctx.restore(); resetFont(ctx);
 }
@@ -890,7 +918,7 @@ function buildPlan(clip, out, opts = {}) {
   // 끝 엔딩: 시작 인트로와 따로. '없음'이면 본편이 아이보리로 조용히 끝남
   // '토순이 엔딩' = 글자만 있는 마무리 카드 (가로·세로 같음). 본편은 아이보리로 페이드아웃된 뒤 이어짐
   last.fadeOut = RULE.fadeOutToIvory;
-  if (state.ending !== 'none' && !cardOn) segs.push({ kind: 'still', style: 'end', role: 'ending', dur: ENDING_SEC });
+  if (!cardOn) { const e = endingSeg(fmt); if (e) segs.push(e); }
   return { fmt, W, H, segs, clip, out };
 }
 
@@ -972,6 +1000,7 @@ function paintSeg(ctx, plan, s, T, cornerImg) {
   else if (s.kind === 'asset') {
     if (s.el.readyState >= 2) drawAsset(ctx, s.el, W, H);
     if (s.role === 'title') drawGreenTitleText(ctx, W, H, fmt, s.text, t);
+    if (s.header) drawEndHeader(ctx, W, H, fmt, t);
   } else {
     if (s.card) {
       drawCard(ctx, W, H, s.clip, s.el, s.caption, s.mode && typeof s.mode === 'object' ? 'crop' : 'main');
@@ -1980,7 +2009,8 @@ async function buildSwatches() {
   await shot(btn('openingMore', 'official'), frameOf(ASSET.opening.official.h, 10.0));
   await shot(btn('openingMore', 'botanical'), frameOf(ASSET.opening.botanical.h, 3.2));
   await shot(btn('openingMore', 'none'), (g, w, h) => { g.strokeStyle = '#D8D1C4'; g.lineWidth = 3; g.beginPath(); g.moveTo(w * 0.44, h / 2); g.lineTo(w * 0.56, h / 2); g.stroke(); });
-  await shot(btn('endingSeg', 'shorts'), (g, w, h) => drawEndCard(g, w, h, 'v', '', 2.2), true);
+  await shot(btn('endingSeg', 'shorts'), async (g, w, h) => { const v = await makeVideo(ASSET.ending.v, { muted: true }); await seekTo(v, 2.4); await frameReady(v); drawAsset(g, v, w, h); drawEndHeader(g, w, h, 'v', 2.4); dropVideo(v); }, true);
+  await shot(btn('endingSeg', 'words'), (g, w, h) => drawEndCard(g, w, h, 'v', '', 2.2), true);
   await shot(btn('endingSeg', 'none'), (g, w, h) => { g.strokeStyle = '#D8D1C4'; g.lineWidth = 4; g.beginPath(); g.moveTo(w * 0.4, h / 2); g.lineTo(w * 0.6, h / 2); g.stroke(); }, true);
   paintStyles();
 }
@@ -2023,7 +2053,7 @@ async function tasteRun(key, live) {
   if (key === 'ending') {
     if (state.ending === 'none') return;
     const [W, H] = SIZE.v;
-    await playRange(0, Infinity, { fmt: 'v', W, H, segs: [{ kind: 'still', style: 'end', role: 'ending', dur: ENDING_SEC }], clip: null }, () => live.frame());
+    await playRange(0, Infinity, { fmt: 'v', W, H, segs: [endingSeg('v')], clip: null }, () => live.frame());
     return;
   }
   const fake = { id: 0, title: SAMPLE_TITLE, caption: '', w: 1920, h: 1080, dur: 10 };
