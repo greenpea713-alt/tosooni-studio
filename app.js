@@ -232,6 +232,33 @@ function drawClassicTitle(ctx, W, H, fmt, text, t) {
   resetFont(ctx);
 }
 
+// ---------------------------------------------------------------- 클래식 전환 카드: 매끈한 아이보리 + 가운데 작은 동그란 토순이 아이콘
+const ICON_CARD_SEC = 1.4;
+function drawTosooniIcon(g, cx, cy, r) {
+  g.save();
+  g.fillStyle = '#EBDCD5'; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();          // 블러시 동그라미
+  g.strokeStyle = '#BFA373'; g.lineWidth = Math.max(1, r * 0.035); g.stroke();                  // 얇은 골드 테
+  g.beginPath(); g.arc(cx, cy, r * 0.97, 0, Math.PI * 2); g.clip();
+  const f = r * 0.42, fy = cy + r * 0.08;
+  g.fillStyle = '#4A4845';                                                                       // 차콜 롭이어
+  for (const d of [-1, 1]) { g.beginPath(); g.ellipse(cx + d * f * 0.95, fy + f * 0.25, f * 0.36, f * 0.85, d * 0.35, 0, Math.PI * 2); g.fill(); }
+  g.beginPath(); g.ellipse(cx, fy - f * 0.12, f * 0.92, f * 0.8, 0, 0, Math.PI * 2); g.fill();    // 머리
+  g.fillStyle = '#F7F3EC'; g.beginPath(); g.ellipse(cx, fy + f * 0.14, f * 0.66, f * 0.54, 0, 0, Math.PI * 2); g.fill();   // 크림 얼굴
+  g.fillStyle = '#2F2E2B';
+  for (const d of [-1, 1]) { g.beginPath(); g.arc(cx + d * f * 0.3, fy + f * 0.02, f * 0.075, 0, Math.PI * 2); g.fill(); }   // 눈
+  g.fillStyle = '#E8A3AE'; heartPath(g, cx, fy + f * 0.2, f * 0.1); g.fill();                  // 핑크 코
+  g.restore();
+}
+function drawIconCard(ctx, W, H, fmt, text, t) {
+  ctx.drawImage(paperTexture(W, H), 0, 0);
+  const k = W / (fmt === 'v' ? 1080 : 1920);
+  const a = ease(prog(t, 0.1, 0.45)) * (1 - ease(prog(t, ICON_CARD_SEC - 0.4, ICON_CARD_SEC - 0.08)));
+  if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a;
+  drawTosooniIcon(ctx, W / 2, H / 2, 46 * k * (fmt === 'v' ? 1.3 : 1) * (0.94 + 0.06 * a));
+  ctx.restore();
+}
+
 // ---------------------------------------------------------------- 가을 테마 (단풍잎·은행잎 페이퍼컷, 크림 종이)
 const AUTUMN = {
   paper: '#F4ECDF', ink: '#3B2F27', gold: '#B0894A', sub: '#8C7B6B',
@@ -535,7 +562,7 @@ async function prepareClip(clip) {
 
     if (needVideo) {
       clip.stage = '읽을 수 있는 형식으로 바꾸는 중…'; lastProg = 0;
-      const vArgs = ['-vf', "scale='if(gte(iw,ih),min(1920,iw),-2)':'if(gte(iw,ih),-2,min(1920,ih))',fps=30,format=yuv420p", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18'];
+      const vArgs = ['-vf', "scale=trunc(iw*sar/2)*2:ih,setsar=1,scale='if(gte(iw,ih),min(1920,iw),-2)':'if(gte(iw,ih),-2,min(1920,ih))',fps=30,format=yuv420p", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18'];
       const args = clip.audio.none
         ? ['-i', inPath, '-map', '0:v:0', ...vArgs, '-movflags', '+faststart', 'out.mp4']
         : ['-i', inPath, '-i', 'clean.wav', '-map', '0:v:0', '-map', '1:a:0', ...vArgs, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', 'out.mp4'];
@@ -596,6 +623,9 @@ function buildPlan(clip, out) {
     else if (autumn) segs.push({ kind: 'still', role: 'title', style: 'autumn', dur: AUTUMN.titleSec, text: title });
     else segs.push({ kind: 'still', role: 'title', dur: CLASSIC_TITLE_SEC, text: title });
   }
+  const classic = !botan && !autumn;
+  // 클래식: 오프닝 뒤 타이틀이 없으면 가운데 동그란 토순이 아이콘 카드로 한 번 쉬어 감
+  if (classic && !title && segs.length) segs.push({ kind: 'still', style: 'icon', dur: ICON_CARD_SEC });
   const main = {
     kind: 'clip', src: clip.url, clip,
     mode: out.kind === 'crop' ? { cropX: clip.cropX } : (vertSrc && fmt === 'h') ? 'contain' : 'cover',
@@ -608,7 +638,10 @@ function buildPlan(clip, out) {
     const end = { kind: 'asset', src: ASSET.ending.v };
     if (botan) main.wipe = true; else end.xfade = RULE.shortsEndingXfade;
     segs.push(end);
-  } else main.fadeOut = RULE.fadeOutToIvory;
+  } else {
+    main.fadeOut = RULE.fadeOutToIvory;
+    if (classic) segs.push({ kind: 'still', style: 'icon', dur: ICON_CARD_SEC });   // 끝도 아이콘 카드로 깔끔하게 닫음
+  }
   return { fmt, W, H, segs, clip, out };
 }
 
@@ -684,7 +717,7 @@ async function runPlan(plan, { record, onProgress }) {
     const t = s.kind === 'still' ? T - s.start : s.el.currentTime;
     ctx.save();
     if (s.xfade) ctx.globalAlpha = clamp((T - s.start) / s.xfade);
-    if (s.kind === 'still') (s.style === 'autumn' ? drawAutumnTitle : drawClassicTitle)(ctx, W, H, fmt, s.text, t);
+    if (s.kind === 'still') (s.style === 'autumn' ? drawAutumnTitle : s.style === 'icon' ? drawIconCard : drawClassicTitle)(ctx, W, H, fmt, s.text, t);
     else if (s.kind === 'asset') {
       if (s.el.readyState >= 2) drawAsset(ctx, s.el, W, H);
       if (s.role === 'title') drawGreenTitleText(ctx, W, H, fmt, s.text, t);
