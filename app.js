@@ -131,15 +131,30 @@ function drawAsset(ctx, src, W, H) {
   const vw = src.videoWidth, vh = src.videoHeight;
   if (!vw || !vh) return;
   if (Math.abs(vw / vh - W / H) < 0.04) { ctx.drawImage(src, 0, 0, W, H); return; }
+  const tall = H / W > vh / vw;           // 세로 화면에 가로 에셋 → 위아래를 채움
+  // 채울 색: 맞닿는 가장자리(가로 에셋이면 윗줄)의 평균색
   edgeCv.width = 8; edgeCv.height = 8;
-  edgeCtx.drawImage(src, 0, 0, vw * 0.02, vh, 0, 0, 8, 8);
-  const d = edgeCtx.getImageData(0, 0, 1, 8).data;
+  if (tall) edgeCtx.drawImage(src, vw * 0.3, 0, vw * 0.4, vh * 0.03, 0, 0, 8, 8);
+  else edgeCtx.drawImage(src, 0, vh * 0.3, vw * 0.03, vh * 0.4, 0, 0, 8, 8);
+  const d = edgeCtx.getImageData(0, 0, 8, 1).data;
   let r = 0, g = 0, b = 0;
   for (let k = 0; k < d.length; k += 4) { r += d[k]; g += d[k + 1]; b += d[k + 2]; }
-  ctx.fillStyle = `rgb(${r / 8 | 0},${g / 8 | 0},${b / 8 | 0})`;
-  ctx.fillRect(0, 0, W, H);
-  const s = Math.min(W / vw, H / vh), dw = vw * s, dh = vh * s;
-  ctx.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  const col = `${r / 8 | 0},${g / 8 | 0},${b / 8 | 0}`;
+  ctx.fillStyle = `rgb(${col})`; ctx.fillRect(0, 0, W, H);
+  // 가로 오프닝을 쇼츠에 놓을 땐 가운데 70%만 보이게 살짝 키움(양옆 여백만 잘림)
+  const s = tall ? W / (vw * 0.7) : Math.min(W / vw, H / vh);
+  const dw = vw * s, dh = vh * s, dx = (W - dw) / 2, dy = (H - dh) / 2;
+  ctx.drawImage(src, dx, dy, dw, dh);
+  // 이음새가 보이지 않게 경계를 부드럽게
+  const f = (tall ? dh : dw) * 0.12;
+  const grad = (x0, y0, x1, y1) => { const gr = ctx.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, `rgba(${col},1)`); gr.addColorStop(1, `rgba(${col},0)`); return gr; };
+  if (tall) {
+    ctx.fillStyle = grad(0, dy, 0, dy + f); ctx.fillRect(0, dy, W, f);
+    ctx.fillStyle = grad(0, dy + dh, 0, dy + dh - f); ctx.fillRect(0, dy + dh - f, W, f);
+  } else {
+    ctx.fillStyle = grad(dx, 0, dx + f, 0); ctx.fillRect(dx, 0, f, H);
+    ctx.fillStyle = grad(dx + dw, 0, dx + dw - f, 0); ctx.fillRect(dx + dw - f, 0, f, H);
+  }
 }
 
 // TOSOONI 작은 로고 (가로: 오른쪽 위, 쇼츠: 위 가운데)
@@ -416,7 +431,7 @@ function buildPlan(clip, out) {
   const segs = [];
   const vertSrc = clip.h > clip.w;
 
-  if (fmt === 'h' && state.opening !== 'none') segs.push({ kind: 'asset', src: pickSrc(ASSET.opening[state.opening], 'h') });
+  if (state.opening !== 'none') segs.push({ kind: 'asset', src: pickSrc(ASSET.opening[state.opening], fmt) });   // 가로·쇼츠 모두 오프닝부터
   const title = (clip.title || '').trim();
   if (title) {
     if (botan) segs.push({ kind: 'asset', role: 'title', src: pickSrc(ASSET.greenTitle, fmt), text: title });
@@ -598,6 +613,7 @@ function refresh() {
   const ready = state.clips.filter((c) => c.status === 'ready');
   const busy = state.clips.some((c) => c.status === 'preparing');
   $('exportBtn').disabled = state.running || !ready.length || busy;
+  fillPicker();
   $('stopBtn').hidden = !state.running;
   $('stageEmpty').hidden = state.clips.length > 0;
   document.querySelectorAll('.seg button, .check input, .clip-card input, .clip-card button').forEach((b) => { b.disabled = state.running; });
@@ -671,7 +687,7 @@ function renderClipList() {
         ${!vertSrc && !long && c.w ? `
         <label class="check"><input type="checkbox" class="f-crop"> 세로 크롭 쇼츠도 만들기 <small>토끼가 잘리지 않을 때만</small></label>
         <div class="crop-row" ${c.cropShorts ? '' : 'hidden'}><span>왼쪽</span><input type="range" class="f-cropx" min="0" max="1" step="0.01"><span>오른쪽</span></div>` : ''}
-        <div class="prev-row">${outs.map((o) => `<button class="btn ghost small f-prev" data-kind="${o.kind}">미리보기 · ${o.kind === 'crop' ? '크롭 쇼츠' : o.fmt === 'v' ? '쇼츠' : '가로'}</button>`).join('')}</div>
+        <div class="prev-row">${outs.map((o) => `<button class="btn ghost small f-prev" data-kind="${o.kind}">▶ 미리보기 · ${o.kind === 'crop' ? '크롭 쇼츠' : o.fmt === 'v' ? '쇼츠' : '가로'}</button>`).join('')}</div>
       </div>`;
     li.querySelector('.name').textContent = `${idx + 1}. ${c.name}`;
     if (c.thumb && c.thumb.videoWidth) {
@@ -771,6 +787,27 @@ $('exportBtn').addEventListener('click', () => withRun(async () => {
   if (!stopFlag) setTimeout(() => setStatus(`완성! 아래에서 ${jobs.length}편을 확인하고 내려받으세요`), 0);
 }));
 $('stopBtn').addEventListener('click', () => { stopFlag = true; });
+
+// 3번 칸의 '어떤 영상을 볼지' 고르기 + 미리보기
+function fillPicker() {
+  const sel = $('pickSel'), cur = currentSelection();
+  const opts = [];
+  state.clips.forEach((c, i) => { if (c.w) for (const o of outputsOf(c)) opts.push({ v: c.id + ':' + o.kind, t: `${i + 1}. ${c.name} → ${o.label}`, ready: c.status === 'ready' }); });
+  sel.innerHTML = opts.map((o) => `<option value="${o.v}">${esc(o.t)}</option>`).join('');
+  if (cur) sel.value = cur.clip.id + ':' + cur.out.kind;
+  $('pickRow').hidden = opts.length === 0;
+  sel.disabled = state.running;
+  const pick = opts.find((o) => o.v === sel.value);
+  $('previewBtn').disabled = state.running || !pick || !pick.ready;
+}
+$('pickSel').addEventListener('change', () => {
+  const [id, kind] = $('pickSel').value.split(':');
+  state.selected = { clipId: +id, kind }; refresh();
+});
+$('previewBtn').addEventListener('click', () => {
+  const cur = currentSelection();
+  if (cur) preview(cur.clip, cur.out.kind);
+});
 
 function addResult(c, o, { blob, mime }) {
   const isMp4 = (mime || '').startsWith('video/mp4');

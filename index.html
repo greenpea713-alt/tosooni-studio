@@ -43,7 +43,7 @@
     </div>
 
     <div class="field">
-      <label>가로 영상 시작</label>
+      <label>시작 오프닝 <small>가로·쇼츠 모두 맨 앞에 붙어요</small></label>
       <div class="seg" id="openingSeg">
         <button data-v="intro4s">4초 인트로</button>
         <button data-v="official">공식 오프닝 11.7초</button>
@@ -87,7 +87,11 @@
     </div>
     <div class="bar"><div class="bar-fill" id="barFill"></div></div>
     <div class="status" id="status">영상을 올려 주세요</div>
+    <div class="pick-row" id="pickRow" hidden>
+      <select class="plain" id="pickSel"></select>
+    </div>
     <div class="actions">
+      <button class="btn ghost" id="previewBtn" disabled>미리보기</button>
       <button class="btn" id="exportBtn" disabled>전부 만들기</button>
       <button class="btn ghost" id="stopBtn" hidden>멈추기</button>
     </div>

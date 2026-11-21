@@ -97,3 +97,4 @@ input.plain:focus{border-color:var(--gold)}
 .yt-form select{font-family:inherit;font-size:13px}
 .yt-msg a{color:var(--charcoal)}
 @media (max-width:600px){.results li{flex-direction:column}.results video{max-width:100%;width:100%}.results li.vert video{width:60%}}
+.pick-row{margin-top:12px}.pick-row select{width:100%;padding:9px 10px;font-size:13px}
