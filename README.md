@@ -46,6 +46,7 @@ https://tosooni-studio.vercel.app
 
 ## 파일
 - `index.html`, `style.css`, `app.js`: 앱 전체 (빌드 과정 없음)
+- `studio-ui.js`: 화면 감성 레이어 — 원클릭 프리셋 알약, 토순이 말풍선 안내, 미리보기 '보정 전' 비교. `app.js`는 건드리지 않고 이미 있는 버튼을 눌러 주기만 해요. (당근·토순이 커서는 `style.css` 안의 SVG 데이터 URL)
 - `assets/`: 오프닝, 초록 타이틀 카드, 테두리, 잎 전환(블루스크린), 쇼츠 엔딩
 - `vendor/ffmpeg/`: 소리 다듬기와 형식 변환용 ffmpeg.wasm (필요할 때만 불러옴)
 

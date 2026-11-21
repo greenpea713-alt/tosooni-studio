@@ -100,3 +100,91 @@ input.plain:focus{border-color:var(--gold)}
 .pick-row{margin-top:12px}.pick-row select{width:100%;padding:9px 10px;font-size:13px}
 .crop-row input.f-cropn{flex:none;width:64px;padding:5px 8px;font-size:13px}
 .clip-card .sheet{width:100%;border:1px solid var(--pearl);margin-top:4px}
+
+/* ============================================================
+   UI 감성 업그레이드 (프리셋 알약 · 토순이 말풍선 · 커스텀 커서 · 호버 컬러 리빌)
+   app.js는 건드리지 않아요. 여기 스타일은 화면에만 닿고, 만들어지는 영상 픽셀에는 영향이 없어요.
+   ============================================================ */
+
+/* ---------- 빠른 시작: 토순이 가이드 + 원클릭 프리셋 ---------- */
+.hero{position:relative;isolation:isolate;overflow:hidden;background:var(--card);border:1px solid var(--pearl);padding:20px 22px 22px}
+.hero:before{content:"";position:absolute;inset:0;z-index:-1;opacity:.6;pointer-events:none;background:
+  radial-gradient(340px 220px at 92% -18%, #FBE7DE 0%, rgba(251,231,222,0) 70%),
+  radial-gradient(320px 220px at -10% 118%, #E9F0E3 0%, rgba(233,240,227,0) 72%)}
+@media (max-width:600px){.hero{padding:16px 16px 18px}}
+
+.guide{display:flex;align-items:center;gap:12px;margin-bottom:15px}
+.toso-ava{width:46px;height:46px;flex:none;border-radius:50%;background:#FFFDF9;border:1px solid var(--pearl);display:grid;place-items:center;box-shadow:0 3px 10px rgba(47,46,43,.07)}
+.toso-ava svg{width:36px;height:36px;display:block;transform-origin:50% 88%;animation:toso-bob 4.6s ease-in-out infinite}
+@keyframes toso-bob{0%,100%{transform:rotate(-2.5deg) translateY(0)}50%{transform:rotate(3deg) translateY(-1px)}}
+@media (prefers-reduced-motion:reduce){.toso-ava svg{animation:none}}
+.bubble{position:relative;flex:1;min-width:0;background:#FFFDF9;border:1px solid var(--pearl);border-radius:15px;padding:10px 15px;font-size:13px;line-height:1.55;color:#3B3A36;box-shadow:0 2px 10px rgba(47,46,43,.045)}
+.bubble:before{content:"";position:absolute;left:-6px;top:calc(50% - 5px);width:10px;height:10px;background:#FFFDF9;border-left:1px solid var(--pearl);border-bottom:1px solid var(--pearl);transform:rotate(45deg)}
+.bubble span{display:block;transition:opacity .18s ease,transform .18s ease}
+.bubble.swap span{opacity:0;transform:translateY(3px)}
+
+.presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+@media (max-width:760px){.presets{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:360px){.presets{grid-template-columns:1fr}}
+.preset{position:relative;isolation:isolate;overflow:hidden;display:flex;align-items:center;gap:9px;text-align:left;
+  border:1px solid var(--pearl);border-radius:999px;background:#FFFDF9;padding:8px 16px 8px 9px;min-height:52px;
+  font-family:inherit;color:var(--charcoal);cursor:pointer;filter:grayscale(1);
+  transition:filter .4s ease,border-color .3s ease,box-shadow .3s ease,transform .2s ease}
+.preset:before{content:"";position:absolute;inset:0;z-index:-1;opacity:0;transition:opacity .45s ease;pointer-events:none;background:
+  radial-gradient(140px circle at var(--mx,50%) var(--my,50%), rgba(255,197,170,.95), rgba(255,226,210,.55) 46%, rgba(250,246,238,0) 78%)}
+.preset:hover,.preset:focus-visible{filter:none;border-color:#E9C3B4;box-shadow:0 8px 20px rgba(232,163,174,.18);transform:translateY(-1px);outline:none}
+.preset:hover:before,.preset:focus-visible:before{opacity:1}
+.preset:active{transform:translateY(0) scale(.99)}
+.preset .p-emo{width:30px;height:30px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:15px;
+  background:radial-gradient(circle at 34% 28%,#FFF5EE,#F6E5DA)}
+.preset .p-in{min-width:0}
+.preset b{display:block;font-weight:500;font-size:13.5px;letter-spacing:.01em;line-height:1.3;white-space:nowrap}
+.preset small,.preset .p-in small{display:block;font-weight:300;color:var(--dove);font-size:11px;letter-spacing:0;line-height:1.4;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preset.on{filter:none;border-color:#E3ABA6;box-shadow:0 4px 16px rgba(232,163,174,.22)}
+.preset.on:before{opacity:.55}
+.preset.on:after{content:"";position:absolute;right:11px;top:11px;width:6px;height:6px;border-radius:50%;background:var(--rose);box-shadow:0 0 0 3px rgba(232,163,174,.18)}
+
+/* ---------- 호버 컬러 리빌: 기존 스타일 버튼도 커서 자리에서 색이 번져요 ---------- */
+.seg button{position:relative;isolation:isolate;overflow:hidden}
+.seg button:before{content:"";position:absolute;inset:0;z-index:-1;opacity:0;transition:opacity .3s ease;pointer-events:none;background:
+  radial-gradient(100px circle at var(--mx,50%) var(--my,50%), rgba(255,201,176,.95), rgba(255,233,220,.5) 48%, rgba(255,255,255,0) 78%)}
+.seg button:hover:before{opacity:1}
+.seg button.on:before{opacity:.16}
+
+/* 업로드 드롭존: 커서를 따라 수채처럼 번지는 웜톤 */
+.drop{position:relative;overflow:hidden;border-color:#D8C7AA}
+.drop:before{content:"";position:absolute;inset:0;opacity:0;transition:opacity .35s ease;pointer-events:none;background:
+  radial-gradient(220px circle at var(--mx,50%) var(--my,50%), rgba(255,206,184,.55), rgba(255,238,222,.22) 55%, rgba(255,255,255,0) 80%)}
+.drop:hover:before,.drop.over:before{opacity:1}
+.drop-inner{position:relative}
+.drop:hover{border-color:var(--rose)}
+
+/* 목록 썸네일: 차분한 흑백 → 마우스가 닿으면 원래 색으로 */
+.thumb canvas{filter:grayscale(.9) contrast(.97);transition:filter .5s ease}
+.clip-card:hover .thumb canvas{filter:none}
+.clip-card .sheet{filter:grayscale(.85);transition:filter .5s ease}
+.clip-card .sheet:hover{filter:none}
+
+/* ---------- 미리보기: 컬러 스포트라이트 + '보정 전' 비교 (CSS 오버레이 / 별도 캔버스) ---------- */
+.stage-fx{position:absolute;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .35s ease}
+.stage:hover .stage-fx{opacity:1}
+.stage-glow{position:absolute;inset:0;background:
+  radial-gradient(220px circle at var(--mx,50%) var(--my,50%), rgba(255,188,156,.34), rgba(255,231,201,.15) 44%, rgba(255,255,255,0) 74%);
+  mix-blend-mode:soft-light}
+.cmp{position:absolute;width:148px;height:148px;border-radius:50%;overflow:hidden;transform:translate(-50%,-50%);
+  border:1.5px solid rgba(255,253,249,.92);box-shadow:0 10px 26px rgba(24,20,18,.3),0 0 0 7px rgba(255,253,249,.2)}
+.cmp canvas{width:100%;height:100%;display:block}
+.cmp-tag{position:absolute;left:50%;bottom:7px;transform:translateX(-50%);font-size:10px;letter-spacing:.06em;
+  color:#FFFDF9;background:rgba(47,46,43,.6);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.stage-note{font-size:11.5px;color:var(--dove);text-align:center;margin-top:8px}
+.stage-note b{font-weight:400;color:#8C7A70}
+
+/* ---------- 미니 토순이·당근 커서 (마우스가 있는 기기에서만) ---------- */
+@media (pointer:fine){
+  body{cursor:url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2228%22%20height=%2228%22%20viewBox=%220%200%2028%2028%22>%20<g%20stroke=%22%233A3835%22%20stroke-width=%22.95%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22>%20<path%20d=%22M16.9%2017.2c1.6-2.6%204.6-3.6%207.2-2.4-1.1%202.9-4.1%204.1-7.2%202.4z%22%20fill=%22%239DBE86%22/>%20<path%20d=%22M17.6%2019.4c2.2-.9%204.7-.2%206.1%201.7-2%201.8-4.9%201.5-6.1-1.7z%22%20fill=%22%23B4D19B%22/>%20<path%20d=%22M2.5%202.5c4.6%202.4%209.4%206.4%2012.4%209.5%202.1%202.1%202.4%205%20.3%206.8-2.1%201.8-5.1%201.2-6.8-.9C6.5%2014.7%204%208.7%202.5%202.5z%22%20fill=%22%23F2A868%22/>%20</g>%20<path%20d=%22M7.7%208.7l2.6%202.2M6.8%2012l2.4%202.1%22%20stroke=%22%23D98A4A%22%20stroke-width=%22.85%22%20stroke-linecap=%22round%22%20fill=%22none%22/>%20</svg>") 2 2, auto}
+  .drop,label.drop,button,.btn,.icon-btn,.preset,.seg button,select,summary,
+  input[type=checkbox],input[type=range],a{cursor:url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2232%22%20height=%2232%22%20viewBox=%220%200%2032%2032%22>%20<g%20stroke=%22%233A3835%22%20stroke-width=%22.95%22%20stroke-linejoin=%22round%22>%20<path%20d=%22M11.4%2012.4C8.4%2010.2%205.2%206.8%204.1%204.1c-.4-1.1.7-2.1%201.8-1.5%202.7%201.2%205.7%204%207.6%206.9z%22%20fill=%22%23F7F3EC%22/>%20<path%20d=%22M6.4%205.6c1.6%201.4%203.2%203.3%204.2%204.8%22%20stroke=%22%23F3C2C8%22%20stroke-width=%221.6%22%20stroke-linecap=%22round%22%20fill=%22none%22/>%20</g>%20<circle%20cx=%2218.6%22%20cy=%2218.8%22%20r=%229.9%22%20fill=%22%23EBDCD5%22%20stroke=%22%23BFA373%22%20stroke-width=%221.2%22/>%20<ellipse%20cx=%2215%22%20cy=%2216.8%22%20rx=%222%22%20ry=%223.5%22%20fill=%22%234A4845%22%20transform=%22rotate(-12%2015%2016.8)%22/>%20<ellipse%20cx=%2222.2%22%20cy=%2216.8%22%20rx=%222%22%20ry=%223.5%22%20fill=%22%234A4845%22%20transform=%22rotate(12%2022.2%2016.8)%22/>%20<ellipse%20cx=%2218.6%22%20cy=%2219.6%22%20rx=%227.1%22%20ry=%226.2%22%20fill=%22%234A4845%22/>%20<ellipse%20cx=%2218.6%22%20cy=%2220.2%22%20rx=%225.4%22%20ry=%226%22%20fill=%22%23F7F3EC%22/>%20<circle%20cx=%2216.4%22%20cy=%2219.1%22%20r=%221.05%22%20fill=%22%232F2E2B%22/>%20<circle%20cx=%2220.8%22%20cy=%2219.1%22%20r=%221.05%22%20fill=%22%232F2E2B%22/>%20<ellipse%20cx=%2214.4%22%20cy=%2222.2%22%20rx=%221.35%22%20ry=%22.85%22%20fill=%22%23F3C2C8%22%20opacity=%22.9%22/>%20<ellipse%20cx=%2222.8%22%20cy=%2222.2%22%20rx=%221.35%22%20ry=%22.85%22%20fill=%22%23F3C2C8%22%20opacity=%22.9%22/>%20<path%20d=%22M18.6%2021.8c1%200%201.6.7%201.6%201.5%200%201-.8%201.7-1.6%201.7s-1.6-.7-1.6-1.7c0-.8.6-1.5%201.6-1.5z%22%20fill=%22%23E8A3AE%22/>%20</svg>") 3 3, pointer}
+  .stage{cursor:url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2232%22%20height=%2232%22%20viewBox=%220%200%2032%2032%22>%20<g%20stroke=%22%233A3835%22%20stroke-width=%22.95%22%20stroke-linejoin=%22round%22>%20<path%20d=%22M11.4%2012.4C8.4%2010.2%205.2%206.8%204.1%204.1c-.4-1.1.7-2.1%201.8-1.5%202.7%201.2%205.7%204%207.6%206.9z%22%20fill=%22%23F7F3EC%22/>%20<path%20d=%22M6.4%205.6c1.6%201.4%203.2%203.3%204.2%204.8%22%20stroke=%22%23F3C2C8%22%20stroke-width=%221.6%22%20stroke-linecap=%22round%22%20fill=%22none%22/>%20</g>%20<circle%20cx=%2218.6%22%20cy=%2218.8%22%20r=%229.9%22%20fill=%22%23EBDCD5%22%20stroke=%22%23BFA373%22%20stroke-width=%221.2%22/>%20<ellipse%20cx=%2215%22%20cy=%2216.8%22%20rx=%222%22%20ry=%223.5%22%20fill=%22%234A4845%22%20transform=%22rotate(-12%2015%2016.8)%22/>%20<ellipse%20cx=%2222.2%22%20cy=%2216.8%22%20rx=%222%22%20ry=%223.5%22%20fill=%22%234A4845%22%20transform=%22rotate(12%2022.2%2016.8)%22/>%20<ellipse%20cx=%2218.6%22%20cy=%2219.6%22%20rx=%227.1%22%20ry=%226.2%22%20fill=%22%234A4845%22/>%20<ellipse%20cx=%2218.6%22%20cy=%2220.2%22%20rx=%225.4%22%20ry=%226%22%20fill=%22%23F7F3EC%22/>%20<circle%20cx=%2216.4%22%20cy=%2219.1%22%20r=%221.05%22%20fill=%22%232F2E2B%22/>%20<circle%20cx=%2220.8%22%20cy=%2219.1%22%20r=%221.05%22%20fill=%22%232F2E2B%22/>%20<ellipse%20cx=%2214.4%22%20cy=%2222.2%22%20rx=%221.35%22%20ry=%22.85%22%20fill=%22%23F3C2C8%22%20opacity=%22.9%22/>%20<ellipse%20cx=%2222.8%22%20cy=%2222.2%22%20rx=%221.35%22%20ry=%22.85%22%20fill=%22%23F3C2C8%22%20opacity=%22.9%22/>%20<path%20d=%22M18.6%2021.8c1%200%201.6.7%201.6%201.5%200%201-.8%201.7-1.6%201.7s-1.6-.7-1.6-1.7c0-.8.6-1.5%201.6-1.5z%22%20fill=%22%23E8A3AE%22/>%20</svg>") 3 3, crosshair}
+  input[type=text],input[type=number],textarea{cursor:text}
+  button:disabled,.btn:disabled{cursor:url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2228%22%20height=%2228%22%20viewBox=%220%200%2028%2028%22>%20<g%20stroke=%22%233A3835%22%20stroke-width=%22.95%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22>%20<path%20d=%22M16.9%2017.2c1.6-2.6%204.6-3.6%207.2-2.4-1.1%202.9-4.1%204.1-7.2%202.4z%22%20fill=%22%239DBE86%22/>%20<path%20d=%22M17.6%2019.4c2.2-.9%204.7-.2%206.1%201.7-2%201.8-4.9%201.5-6.1-1.7z%22%20fill=%22%23B4D19B%22/>%20<path%20d=%22M2.5%202.5c4.6%202.4%209.4%206.4%2012.4%209.5%202.1%202.1%202.4%205%20.3%206.8-2.1%201.8-5.1%201.2-6.8-.9C6.5%2014.7%204%208.7%202.5%202.5z%22%20fill=%22%23F2A868%22/>%20</g>%20<path%20d=%22M7.7%208.7l2.6%202.2M6.8%2012l2.4%202.1%22%20stroke=%22%23D98A4A%22%20stroke-width=%22.85%22%20stroke-linecap=%22round%22%20fill=%22none%22/>%20</svg>") 2 2, not-allowed}
+}
