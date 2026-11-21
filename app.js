@@ -174,9 +174,10 @@ function drawWatermark(ctx, W, H, fmt, alpha) {
   resetFont(ctx);
 }
 // 도입부 자막: 위쪽에 작게
-function drawCaption(ctx, W, H, fmt, text, t) {
+function drawCaption(ctx, W, H, fmt, text, t, start = 0, dur = RULE.captionSec) {
   if (!text) return;
-  const a = Math.min(prog(t, 0.25, 0.6), 1 - prog(t, RULE.captionSec - 0.35, RULE.captionSec));
+  const u = t - (start || 0), d = Math.max(0.8, dur || RULE.captionSec);
+  const a = Math.min(prog(u, 0.25, 0.6), 1 - prog(u, d - 0.35, d));
   if (a <= 0) return;
   const vert = fmt === 'v';
   const px = fitPx(ctx, text, 400, vert ? 46 : 40, W * 0.84, 0.04);
@@ -335,7 +336,7 @@ function drawClassicTitle(ctx, W, H, fmt, text, t) {
   const cx = W / 2, yc = H * (vert ? 0.46 : 0.5);
   const out = 1 - prog(t, CLASSIC_TITLE_SEC - 0.4, CLASSIC_TITLE_SEC - 0.1);   // 끝에서 아이보리로 비움
   // 골드 실선 + 하트
-  const lp = easeOut(prog(t, 0.25, 0.95)), half = 110 * k * lp, hy = yc - 118 * k;
+  const lp = easeOut(prog(t, 0.25, 0.95)), half = 110 * k * lp, hy = yc - 92 * k;
   ctx.save();
   ctx.globalAlpha = out;
   if (lp > 0) {
@@ -346,17 +347,16 @@ function drawClassicTitle(ctx, W, H, fmt, text, t) {
   if (ha > 0) { ctx.globalAlpha = out * ha; ctx.fillStyle = '#E8A3AE'; heartPath(ctx, cx, hy - 1, 11 * k * (0.85 + 0.15 * easeOut(ha))); ctx.fill(); }
   ctx.textBaseline = 'alphabetic';
   const ta = ease(prog(t, 0.7, 1.3));
-  if (ta > 0) { ctx.globalAlpha = out * ta; setFont(ctx, 300, 34 * k, 34 * k * 0.2); ctx.fillStyle = '#8E8B85'; centerText(ctx, '오늘은', cx, yc - 34 * k + (1 - ta) * 8, 34 * k * 0.2); }
-  const ma = ease(prog(t, 0.95, 1.75));
+  const ma = ease(prog(t, 0.8, 1.6));
   if (ma > 0 && text) {
     ctx.globalAlpha = out * ma;
     const lsR = 0.08 + 0.12 * (1 - ma);
-    const px = fitPx(ctx, text, 300, 92 * k, W * (vert ? 0.82 : 0.6), lsR);
+    const px = fitPx(ctx, text, 300, 84 * k, W * (vert ? 0.84 : 0.66), lsR);
     ctx.fillStyle = '#2F2E2B';
-    centerText(ctx, text, cx, yc + 64 * k + (1 - ma) * 10, px * lsR);
+    centerText(ctx, text, cx, yc + 30 * k + (1 - ma) * 10, px * lsR);
   }
-  const fa = ease(prog(t, 1.35, 1.95));
-  if (fa > 0) { ctx.globalAlpha = out * fa; setFont(ctx, 400, 21 * k, 21 * k * 0.38); ctx.fillStyle = '#BFA373'; centerText(ctx, '토순이 친구', cx, yc + 160 * k, 21 * k * 0.38); }
+  const fa = ease(prog(t, 1.25, 1.85));
+  if (fa > 0) { ctx.globalAlpha = out * fa; setFont(ctx, 400, 21 * k, 21 * k * 0.38); ctx.fillStyle = '#BFA373'; centerText(ctx, '토순이 친구', cx, yc + 120 * k, 21 * k * 0.38); }
   ctx.restore();
   resetFont(ctx);
 }
@@ -386,6 +386,35 @@ function drawIconCard(ctx, W, H, fmt, text, t) {
   ctx.save(); ctx.globalAlpha = a;
   drawTosooniIcon(ctx, W / 2, H / 2, 46 * k * (fmt === 'v' ? 1.3 : 1) * (0.94 + 0.06 * a));
   ctx.restore();
+}
+
+// ---------------------------------------------------------------- 미니멀 인트로: 매끈한 아이보리 · 얇은 골드 호 · 작은 토순이 · 하트 하나 · TOSOONI
+const MINIMAL_SEC = 3.4;
+function drawMinimalIntro(ctx, W, H, fmt, text, t) {
+  ctx.drawImage(paperTexture(W, H), 0, 0);
+  const vert = fmt === 'v', k = W / (vert ? 1080 : 1920) * (vert ? 1.25 : 1);
+  const cx = W / 2, cy = H * (vert ? 0.45 : 0.42);
+  const out = 1 - ease(prog(t, MINIMAL_SEC - 0.5, MINIMAL_SEC - 0.06));
+  const R = 112 * k;
+  ctx.save(); ctx.globalAlpha = out;
+  // 얇은 골드 호: 꼭대기(하트 자리)를 비워 두고 양옆으로 천천히 그려짐
+  const lp = easeOut(prog(t, 0.15, 1.2));
+  if (lp > 0) {
+    ctx.strokeStyle = '#BFA373'; ctx.lineWidth = 1.3 * k; ctx.lineCap = 'round';
+    const gap = 0.045 * Math.PI, sweep = 0.36 * Math.PI * lp;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 1.5 * Math.PI - gap - sweep, 1.5 * Math.PI - gap); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 1.5 * Math.PI + gap, 1.5 * Math.PI + gap + sweep); ctx.stroke();
+  }
+  const ha = prog(t, 0.95, 1.35);
+  if (ha > 0) { ctx.globalAlpha = out * ha; ctx.fillStyle = '#E8A3AE'; heartPath(ctx, cx, cy - R, 7 * k * (0.8 + 0.2 * easeOut(ha))); ctx.fill(); }
+  const ra = ease(prog(t, 0.5, 1.2));
+  if (ra > 0) { ctx.globalAlpha = out * ra; drawTosooniIcon(ctx, cx, cy + (1 - ra) * 6 * k, 66 * k); }
+  ctx.textBaseline = 'alphabetic';
+  const la = ease(prog(t, 1.15, 1.85));
+  if (la > 0) { ctx.globalAlpha = out * la; const px = 38 * k, ls = px * 0.5; setFont(ctx, 300, px, ls); ctx.fillStyle = '#2F2E2B'; centerText(ctx, 'TOSOONI', cx, cy + R + 64 * k + (1 - la) * 6 * k, ls); }
+  const sa = ease(prog(t, 1.45, 2.05));
+  if (sa > 0) { ctx.globalAlpha = out * sa; const px = 16 * k, ls = px * 0.5; setFont(ctx, 400, px, ls); ctx.fillStyle = '#BFA373'; centerText(ctx, '토순이 친구', cx, cy + R + 102 * k, ls); }
+  ctx.restore(); resetFont(ctx);
 }
 
 // ---------------------------------------------------------------- 가을 테마 (단풍잎·은행잎 페이퍼컷, 크림 종이)
@@ -496,16 +525,14 @@ function drawAutumnTitle(ctx, W, H, fmt, text, t) {
   const cx = W / 2, yc = H * (vert ? 0.44 : 0.46);
   const out = 1 - prog(t, AUTUMN.titleSec - 0.35, AUTUMN.titleSec);
   ctx.save(); ctx.globalAlpha = out; ctx.textBaseline = 'alphabetic';
-  const lp = easeOut(prog(t, 0.25, 0.95)), half = 110 * k * lp, hy = yc - 118 * k;
+  const lp = easeOut(prog(t, 0.25, 0.95)), half = 110 * k * lp, hy = yc - 92 * k;
   if (lp > 0) { ctx.strokeStyle = AUTUMN.gold; ctx.lineWidth = 1.5 * k; ctx.beginPath(); ctx.moveTo(cx - 22 * k, hy); ctx.lineTo(cx - 22 * k - half, hy); ctx.moveTo(cx + 22 * k, hy); ctx.lineTo(cx + 22 * k + half, hy); ctx.stroke(); }
   const ha = prog(ts, 0.55, 0.8);
   if (ha > 0) { ctx.globalAlpha = out * ha; drawLeaf(ctx, { type: 'maple', color: AUTUMN.maple[1] }, cx, hy, 30 * k, 0.15); }
-  const ta = ease(prog(t, 0.7, 1.3));
-  if (ta > 0) { ctx.globalAlpha = out * ta; setFont(ctx, 300, 34 * k, 34 * k * 0.2); ctx.fillStyle = AUTUMN.sub; centerText(ctx, '오늘은', cx, yc - 34 * k + (1 - ta) * 8, 34 * k * 0.2); }
-  const ma = ease(prog(t, 0.95, 1.75));
-  if (ma > 0 && text) { ctx.globalAlpha = out * ma; const lsR = 0.08 + 0.12 * (1 - ma); const px = fitPx(ctx, text, 300, 92 * k, W * (vert ? 0.82 : 0.6), lsR); ctx.fillStyle = AUTUMN.ink; centerText(ctx, text, cx, yc + 64 * k + (1 - ma) * 10, px * lsR); }
-  const fa = ease(prog(t, 1.35, 1.95));
-  if (fa > 0) { ctx.globalAlpha = out * fa; setFont(ctx, 400, 21 * k, 21 * k * 0.38); ctx.fillStyle = AUTUMN.gold; centerText(ctx, '토순이 친구', cx, yc + 160 * k, 21 * k * 0.38); }
+  const ma = ease(prog(t, 0.8, 1.6));
+  if (ma > 0 && text) { ctx.globalAlpha = out * ma; const lsR = 0.08 + 0.12 * (1 - ma); const px = fitPx(ctx, text, 300, 84 * k, W * (vert ? 0.84 : 0.66), lsR); ctx.fillStyle = AUTUMN.ink; centerText(ctx, text, cx, yc + 30 * k + (1 - ma) * 10, px * lsR); }
+  const fa = ease(prog(t, 1.25, 1.85));
+  if (fa > 0) { ctx.globalAlpha = out * fa; setFont(ctx, 400, 21 * k, 21 * k * 0.38); ctx.fillStyle = AUTUMN.gold; centerText(ctx, '토순이 친구', cx, yc + 120 * k, 21 * k * 0.38); }
   ctx.restore(); resetFont(ctx);
 }
 // 낙엽 전환: 잎들이 비스듬히 쏟아지며 화면을 덮었다가(크림색) 걷힘. cut 지점에서 완전히 가려짐
@@ -739,14 +766,15 @@ async function frameOverlay(fmt, W, H) {
 }
 
 // 한 편의 타임라인
-function buildPlan(clip, out) {
+function buildPlan(clip, out, opts = {}) {
   const fmt = out.fmt, [W, H] = SIZE[fmt];
   const botan = state.theme === 'botanical', autumn = state.theme === 'autumn';
   const cardOn = !!state.card && fmt === 'v';   // 카드에서는 제목이 카드 안에 있어요
   const segs = [];
   const vertSrc = clip.h > clip.w;
 
-  if (state.opening !== 'none') segs.push({ kind: 'asset', src: pickSrc(ASSET.opening[state.opening], fmt) });   // 가로·쇼츠 모두 오프닝부터
+  if (state.opening === 'minimal') segs.push({ kind: 'still', style: 'minimal', role: 'opening', dur: MINIMAL_SEC });
+  else if (state.opening !== 'none') segs.push({ kind: 'asset', role: 'opening', src: pickSrc(ASSET.opening[state.opening], fmt) });   // 가로·쇼츠 모두 오프닝부터
   const title = (clip.title || '').trim();
   if (title && !cardOn) {
     if (botan) segs.push({ kind: 'asset', role: 'title', src: pickSrc(ASSET.greenTitle, fmt), text: title });
@@ -755,38 +783,129 @@ function buildPlan(clip, out) {
   }
   const classic = !botan && !autumn;
   // 클래식: 오프닝 뒤 타이틀이 없으면 가운데 동그란 토순이 아이콘 카드로 한 번 쉬어 감
-  if (classic && !title && segs.length && !cardOn) segs.push({ kind: 'still', style: 'icon', dur: ICON_CARD_SEC });
+  if (classic && !title && segs.length && !cardOn && state.opening !== 'minimal') segs.push({ kind: 'still', style: 'icon', role: 'pause', dur: ICON_CARD_SEC });
   const main = {
     kind: 'clip', src: clip.url, clip, card: cardOn,
     mode: out.kind === 'crop' ? { cropX: clip.cropX } : (vertSrc && fmt === 'h') ? 'contain' : 'cover',
-    caption: (clip.caption || '').trim(),
+    caption: (clip.caption || '').trim(), capStart: clip.capStart || 0, capDur: clip.capDur || RULE.captionSec, role: 'main',
   };
   const intoMain = segs.length > 0;
   if (intoMain) { if (botan) segs[segs.length - 1].wipe = true; else if (autumn && !cardOn) main.leafIn = true; else main.fadeIn = RULE.fadeInFromIvory; }
+  if (opts.noMain) return { fmt, W, H, segs, clip, out };   // 스타일 맛보기: 앞부분만
   segs.push(main);
   if (fmt === 'v' && state.ending !== 'none') {
-    const end = { kind: 'asset', src: ASSET.ending.v };
+    const end = { kind: 'asset', role: 'ending', src: ASSET.ending.v };
     if (botan) main.wipe = true; else end.xfade = RULE.shortsEndingXfade;
     segs.push(end);
   } else {
     main.fadeOut = RULE.fadeOutToIvory;
-    if (classic && !cardOn) segs.push({ kind: 'still', style: 'icon', dur: ICON_CARD_SEC });   // 끝도 아이콘 카드로 깔끔하게 닫음
+    if (classic && !cardOn) segs.push({ kind: 'still', style: 'icon', role: 'ending', dur: ICON_CARD_SEC });   // 끝도 아이콘 카드로 깔끔하게 닫음
   }
   return { fmt, W, H, segs, clip, out };
 }
 
 // ================================================================ 재생/녹화 엔진
+// 타임라인은 '처음부터 몇 초'(T) 하나로 움직인다. 재생·녹화·편집 화면(멈춘 채 되감기)이 같은 그리기를 쓴다.
 let stopFlag = false;
-async function runPlan(plan, { record, onProgress }) {
+
+// 장면들의 영상을 불러오고 시작 시각을 계산 (cache를 주면 같은 영상을 다시 쓰고 소리는 끔)
+async function loadSegs(plan, cache) {
+  const get = async (src) => {
+    if (!cache) return makeVideo(src);
+    if (!cache.has(src)) cache.set(src, makeVideo(src, { muted: true }));
+    return cache.get(src);
+  };
+  let T0 = 0;
+  for (const s of plan.segs) {
+    if (s.kind !== 'still') {
+      s.el = await get(s.src);
+      s.dur = s.el.duration;
+      if (s.kind === 'clip') {
+        const full = s.el.duration || s.clip.dur || 1;
+        s.trimIn = clamp(s.clip.trimIn || 0, 0, Math.max(0, full - 0.5));
+        const out = s.clip.trimOut > 0 ? Math.min(s.clip.trimOut, full) : full;
+        s.dur = Math.max(0.5, out - s.trimIn);
+      }
+    }
+    s.start = Math.max(0, T0 - (s.xfade || 0));
+    T0 = s.start + s.dur;
+    if (s.wipe) {
+      s.wipeEl = await get(pickSrc(ASSET.wipe, plan.fmt));
+      s.wipeAt = T0 - ASSET.wipe.cut;
+    }
+  }
+  plan.total = T0;
+  return plan;
+}
+
+// 장면의 '자기 시간' t
+function segTime(s, T) {
+  if (s.kind === 'still') return T - s.start;
+  if (s.kind === 'clip') return s.el.currentTime - (s.trimIn || 0);
+  return s.el.currentTime;
+}
+
+// 장면 하나 그리기
+function paintSeg(ctx, plan, s, T, cornerImg) {
+  const { W, H, fmt } = plan;
+  const t = segTime(s, T);
+  ctx.save();
+  if (s.xfade) ctx.globalAlpha = clamp((T - s.start) / s.xfade);
+  if (s.kind === 'still') ({ autumn: drawAutumnTitle, icon: drawIconCard, minimal: drawMinimalIntro }[s.style] || drawClassicTitle)(ctx, W, H, fmt, s.text, t);
+  else if (s.kind === 'asset') {
+    if (s.el.readyState >= 2) drawAsset(ctx, s.el, W, H);
+    if (s.role === 'title') drawGreenTitleText(ctx, W, H, fmt, s.text, t);
+  } else {
+    if (s.card) {
+      drawCard(ctx, W, H, s.clip, s.el, s.caption, s.mode && typeof s.mode === 'object' ? 'crop' : 'main');
+    } else {
+      if (state.grade && 'filter' in ctx) ctx.filter = 'sepia(0.07) saturate(1.04) brightness(1.01)';
+      if (s.el.readyState >= 2) drawVideo(ctx, s.el, W, H, s.mode);
+      ctx.filter = 'none';
+      if (cornerImg) ctx.drawImage(cornerImg, 0, 0, W, H);
+      const vis = 1 - (s.fadeIn ? 1 - clamp(t / s.fadeIn) : 0);
+      if (state.watermark) drawWatermark(ctx, W, H, fmt, vis);
+      drawCaption(ctx, W, H, fmt, s.caption, t, s.capStart, s.capDur);
+    }
+    // 아이보리에서 열리고 / 아이보리로 닫힘
+    let iv = 0;
+    if (s.fadeIn) iv = Math.max(iv, 1 - clamp(t / s.fadeIn));
+    if (s.fadeOut) iv = Math.max(iv, clamp((t - (s.dur - s.fadeOut)) / s.fadeOut));
+    if (iv > 0) { ctx.globalAlpha *= iv; ctx.fillStyle = RULE.ivory; ctx.fillRect(0, 0, W, H); }
+  }
+  ctx.restore();
+}
+
+// T 시점의 한 화면
+function paintFrame(ctx, plan, T, cornerImg) {
+  const { W, H, segs } = plan;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  ctx.fillStyle = RULE.ivory; ctx.fillRect(0, 0, W, H);
+  const live = segs.filter((s) => T >= s.start && (T < s.start + s.dur || s === segs[segs.length - 1]));
+  for (const s of live) paintSeg(ctx, plan, s, T, cornerImg);
+  if (!live.length) { const prev = [...segs].reverse().find((s) => T >= s.start); if (prev) paintSeg(ctx, plan, prev, T, cornerImg); }
+  for (const s of segs) {
+    if (s.wipeEl && T >= s.wipeAt && T < s.wipeAt + (s.wipeEl.duration || 2) && !s.wipeEl.ended && s.wipeEl.readyState >= 2) {
+      keyer ||= new Keyer();
+      ctx.drawImage(keyer.key(s.wipeEl), 0, 0, W, H);
+    }
+  }
+  for (const s of segs) if (s.leafIn) drawAutumnTransition(ctx, W, H, T - s.start + AUTUMN.transCut);
+}
+
+// 재생(소리 포함) 또는 녹화. from 초부터, until 초까지(없으면 끝까지)
+async function runPlan(plan, { record, onProgress, from = 0, until = Infinity }) {
   const { W, H, fmt, segs, clip } = plan;
   screen.width = W; screen.height = H;
   const ctx = sctx;
   keyer ||= new Keyer();
   const ac = getAudioCtx(); await ac.resume();
-  await document.fonts.load('300 60px "Noto Sans KR"', 'TOSOONI 오늘은 토순이 친구' + segs.map((s) => (s.text || '') + (s.caption || '')).join(''));
-  await document.fonts.load('400 40px "Noto Sans KR"', '토순이 친구' + segs.map((s) => s.caption || '').join(''));
-  await document.fonts.load('500 40px "Noto Sans KR"', segs.map((s) => (s.text || '') + (s.clip ? (s.clip.title || '') : '')).join('') + '토순이 친구').catch(() => {});
+  const words = segs.map((s) => (s.text || '') + (s.caption || '') + (s.clip ? (s.clip.title || '') : '')).join('');
+  await document.fonts.load('300 60px "Noto Sans KR"', 'TOSOONI 토순이 친구' + words);
+  await document.fonts.load('400 40px "Noto Sans KR"', '토순이 친구' + words);
+  await document.fonts.load('500 40px "Noto Sans KR"', words + '토순이 친구').catch(() => {});
   const cornerImg = state.card && fmt === 'v' ? null : await frameOverlay(fmt, W, H);
+  await loadSegs(plan);
 
   // 오디오: 각 소스 → 음량 → 마스터 → 리미터 → 스피커(+녹음)
   const master = ac.createGain();
@@ -800,36 +919,26 @@ async function runPlan(plan, { record, onProgress }) {
     const src = ac.createMediaElementSource(el), g = ac.createGain();
     g.gain.value = gain; src.connect(g).connect(master); nodes.push(src, g); return g;
   };
-
-  // 소스 불러오기 + 시작 시각 계산
-  let T0 = 0;
   for (const s of segs) {
-    if (s.kind !== 'still') {
-      s.el = await makeVideo(s.src);
-      s.dur = s.el.duration;
-      let g = 1;
-      if (s.kind === 'clip') {
-        const a = clip.audio;
-        const useClean = (state.clean || clip.embeddedClean) && a && !a.none;
-        if (useClean && a.hissOnly && state.muteHiss) g = 0;
-        else if (state.normalize) g = gainFor(useClean ? a.cleanLufs : await lufsOfUrl(clip.url));
-        // 다듬은 소리는 따로 재생하고 영상의 원래 소리는 끈다
-        if (state.clean && clip.cleanAudio) {
-          s.audioEl = await makeMedia('audio', clip.cleanAudio);
-          s.gain = route(s.audioEl, g); route(s.el, 0);
-        }
-      } else if (state.normalize) g = gainFor(await lufsOfUrl(s.src));
-      if (!s.gain) s.gain = route(s.el, g);
-    }
-    s.start = Math.max(0, T0 - (s.xfade || 0));
-    T0 = s.start + s.dur;
-    if (s.wipe) {
-      s.wipeEl = await makeVideo(pickSrc(ASSET.wipe, fmt));
-      route(s.wipeEl, 1);
-      s.wipeAt = T0 - ASSET.wipe.cut;
-    }
+    if (s.kind === 'still') continue;
+    let g = 1;
+    if (s.kind === 'clip') {
+      const a = clip.audio;
+      const useClean = (state.clean || clip.embeddedClean) && a && !a.none;
+      if (useClean && a.hissOnly && state.muteHiss) g = 0;
+      else if (state.normalize) g = gainFor(useClean ? a.cleanLufs : await lufsOfUrl(clip.url));
+      // 다듬은 소리는 따로 재생하고 영상의 원래 소리는 끈다
+      if (state.clean && clip.cleanAudio) {
+        s.audioEl = await makeMedia('audio', clip.cleanAudio);
+        s.gain = route(s.audioEl, g); route(s.el, 0);
+      }
+    } else if (state.normalize) g = gainFor(await lufsOfUrl(s.src));
+    if (!s.gain) s.gain = route(s.el, g);
+    if (s.wipeEl) route(s.wipeEl, 1);
   }
-  const total = T0;
+  const total = plan.total;
+  from = clamp(from, 0, Math.max(0, total - 0.05));
+  const end = Math.min(total, until);
 
   let rec = null, chunks = [], mime = '';
   if (record) {
@@ -843,61 +952,37 @@ async function runPlan(plan, { record, onProgress }) {
   }
   const play = async (el) => { try { await el.play(); } catch (e) { el.muted = true; await el.play().catch(() => {}); } };
 
-  // 한 장면 그리기
-  const drawSeg = (s, T) => {
-    const t = s.kind === 'still' ? T - s.start : s.el.currentTime;
-    ctx.save();
-    if (s.xfade) ctx.globalAlpha = clamp((T - s.start) / s.xfade);
-    if (s.kind === 'still') (s.style === 'autumn' ? drawAutumnTitle : s.style === 'icon' ? drawIconCard : drawClassicTitle)(ctx, W, H, fmt, s.text, t);
-    else if (s.kind === 'asset') {
-      if (s.el.readyState >= 2) drawAsset(ctx, s.el, W, H);
-      if (s.role === 'title') drawGreenTitleText(ctx, W, H, fmt, s.text, t);
-    } else {
-      if (s.card) {
-        drawCard(ctx, W, H, s.clip, s.el, s.caption, s.mode && typeof s.mode === 'object' ? 'crop' : 'main');
-      } else {
-        if (state.grade && 'filter' in ctx) ctx.filter = 'sepia(0.07) saturate(1.04) brightness(1.01)';
-        if (s.el.readyState >= 2) drawVideo(ctx, s.el, W, H, s.mode);
-        ctx.filter = 'none';
-        if (cornerImg) ctx.drawImage(cornerImg, 0, 0, W, H);
-        const vis = 1 - (s.fadeIn ? 1 - clamp(t / s.fadeIn) : 0);
-        if (state.watermark) drawWatermark(ctx, W, H, fmt, vis);
-        drawCaption(ctx, W, H, fmt, s.caption, t);
-      }
-      // 아이보리에서 열리고 / 아이보리로 닫힘
-      let iv = 0;
-      if (s.fadeIn) iv = Math.max(iv, 1 - clamp(t / s.fadeIn));
-      if (s.fadeOut) iv = Math.max(iv, clamp((t - (s.dur - s.fadeOut)) / s.fadeOut));
-      if (iv > 0) { ctx.globalAlpha *= iv; ctx.fillStyle = RULE.ivory; ctx.fillRect(0, 0, W, H); }
-    }
-    ctx.restore();
-  };
-
-  // 첫 프레임 그려 두고 시작
+  // 시작 위치의 첫 장면을 맞춰 두고 시작
+  for (const s of segs) {
+    if (!s.el) continue;
+    const off = clamp(from - s.start, 0, s.dur);
+    s.el.currentTime = (s.trimIn || 0) + off;
+    if (s.audioEl) s.audioEl.currentTime = s.el.currentTime;
+    if (from >= s.start + s.dur) { s.started = s.stopped = true; }
+  }
+  for (const s of segs) if (s.wipeEl && from > s.wipeAt) { s.wipeStarted = true; if (from < s.wipeAt + (s.wipeEl.duration || 2)) { s.wipeEl.currentTime = from - s.wipeAt; play(s.wipeEl); } }
   ctx.fillStyle = RULE.ivory; ctx.fillRect(0, 0, W, H);
   if (rec) rec.start(1000);
-  const t0 = performance.now() / 1000 + 0.05;
+  const t0 = performance.now() / 1000 + 0.05 - from;
+  let lastT = from;
   await new Promise((resolve) => {
     let fin = false;
     const tick = () => {
       if (fin) return;
       const T = performance.now() / 1000 - t0;
-      if (stopFlag || T >= total + 0.05) { fin = true; resolve(); return; }
+      if (stopFlag || T >= end + 0.05) { fin = true; resolve(); return; }
+      lastT = Math.min(T, total);
       for (const s of segs) {
         if (s.audioEl && s.started && !s.stopped && Math.abs(s.audioEl.currentTime - s.el.currentTime) > 0.12) s.audioEl.currentTime = s.el.currentTime;
-        if (s.el && !s.started && T >= s.start) { s.started = true; play(s.el); if (s.audioEl) play(s.audioEl); if (s.fadeOut) s.gain.gain.setTargetAtTime(0, ac.currentTime + Math.max(0, s.dur - s.fadeOut), s.fadeOut / 3); }
+        if (s.el && !s.started && T >= s.start) {
+          s.started = true; play(s.el); if (s.audioEl) play(s.audioEl);
+          if (s.fadeOut) s.gain.gain.setTargetAtTime(0, ac.currentTime + Math.max(0, s.start + s.dur - s.fadeOut - T), s.fadeOut / 3);
+        }
         if (s.el && s.started && !s.stopped && T >= s.start + s.dur + 0.1) { s.stopped = true; s.el.pause(); if (s.audioEl) s.audioEl.pause(); }
         if (s.wipeEl && !s.wipeStarted && T >= s.wipeAt) { s.wipeStarted = true; play(s.wipeEl); }
       }
-      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
-      ctx.fillStyle = RULE.ivory; ctx.fillRect(0, 0, W, H);
-      // 지금 보이는 장면들(교차 중이면 둘) 순서대로
-      const live = segs.filter((s) => T >= s.start && (T < s.start + s.dur || s === segs[segs.length - 1]));
-      for (const s of live) drawSeg(s, T);
-      if (!live.length) { const prev = [...segs].reverse().find((s) => T >= s.start); if (prev) drawSeg(prev, T); }
-      for (const s of segs) if (s.wipeStarted && !s.wipeEl.ended && s.wipeEl.readyState >= 2) ctx.drawImage(keyer.key(s.wipeEl), 0, 0, W, H);
-      for (const s of segs) if (s.leafIn) drawAutumnTransition(ctx, W, H, T - s.start + AUTUMN.transCut);
-      onProgress && onProgress(T, total);
+      paintFrame(ctx, plan, T, cornerImg);
+      onProgress && onProgress(lastT, total);
       if (document.hidden) setTimeout(tick, 1000 / 30); else requestAnimationFrame(tick);
     };
     tick();
@@ -911,22 +996,32 @@ async function runPlan(plan, { record, onProgress }) {
   }
   try { limiter.disconnect(); master.disconnect(); nodes.forEach((n) => n.disconnect()); } catch (e) {}
   for (const s of segs) { dropVideo(s.el); dropVideo(s.wipeEl); dropVideo(s.audioEl); }
-  return { blob, mime, total };
+  return { blob, mime, total, lastT };
 }
 
 // ================================================================ UI
 function setStatus(t) { $('status').textContent = t; }
 function setBar(p) { $('barFill').style.width = (clamp(p) * 100).toFixed(1) + '%'; }
 
+// 미리보기 재생 중이면 멈추고 끝날 때까지 기다림 (만들기 중에는 그대로)
+async function stopPreview() {
+  if (!(state.running && ed.playing)) return;
+  stopFlag = true;
+  while (state.running) await sleep(30);
+}
 function setupSeg(id, key) {
   $(id).addEventListener('click', (e) => {
     const b = e.target.closest('button');
-    if (!b || state.running) return;
-    state[key] = b.dataset.v; refresh();
+    if (!b || (state.running && !ed.playing)) return;
+    (async () => {
+      await stopPreview();
+      state[key] = b.dataset.v; refresh();
+      tasteStyle(key, b);
+    })();
   });
 }
 setupSeg('themeSeg', 'theme'); setupSeg('openingSeg', 'opening'); setupSeg('endingSeg', 'ending');
-for (const k of ['watermark', 'grade', 'frame', 'clean', 'muteHiss', 'normalize']) $(k).addEventListener('change', (e) => { state[k] = e.target.checked; refresh(); });
+for (const k of ['watermark', 'grade', 'frame', 'clean', 'muteHiss', 'normalize']) $(k).addEventListener('change', async (e) => { await stopPreview(); state[k] = e.target.checked; refresh(); });
 
 const paint = (id, v) => $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
 
@@ -947,7 +1042,10 @@ function refresh() {
   fillPicker();
   $('stopBtn').hidden = !state.running;
   $('stageEmpty').hidden = state.clips.length > 0;
-  document.querySelectorAll('.seg button, .check input, .clip-card input, .clip-card button').forEach((b) => { b.disabled = state.running; });
+  const lock = state.running && !ed.playing;   // 만드는 중에만 잠금 (미리보기 재생 중에는 바로 바꿀 수 있게)
+  document.querySelectorAll('.seg button, .check input, .clip-card input, .clip-card button, #editor input, #editor .link, .r-fix').forEach((b) => { b.disabled = lock; });
+  $('edMake').disabled = state.running;
+  $('edPlay').classList.toggle('on', state.running && ed.playing);
   if (!state.running) {
     if (!state.clips.length) setStatus('영상을 올려 주세요');
     else if (busy) setStatus('읽을 수 없는 형식이라 변환하는 중이에요. 끝나면 미리보기와 만들기를 누를 수 있어요.');
@@ -964,6 +1062,12 @@ let stillTok = 0;
 async function drawStill() {
   const tok = ++stillTok;
   const sel = currentSelection();
+  // 고를 수 있는 영상이 있으면 편집 화면(타임라인)으로 보여 줌
+  if (sel && sel.clip.status === 'ready' && sel.clip.thumb && sel.clip.thumb.videoWidth) {
+    ed.ready = edBuild().then((p) => { if (p && !state.running) edSeek(ed.T); return p; }).catch((e) => { console.error(e); return null; });
+    return ed.ready;
+  }
+  $('editor').hidden = true;
   const fmt = sel ? sel.out.fmt : 'h';
   const [W, H] = SIZE[fmt];
   $('stage').classList.toggle('vert', fmt === 'v');
@@ -986,7 +1090,7 @@ async function drawStill() {
   sctx.filter = 'none';
   if (corner) sctx.drawImage(corner, 0, 0, W, H);
   if (state.watermark) drawWatermark(sctx, W, H, fmt, 1);
-  if (c.caption) drawCaption(sctx, W, H, fmt, c.caption.trim(), 1.5);
+  if (c.caption) drawCaption(sctx, W, H, fmt, c.caption.trim(), (c.capStart || 0) + 1.5, c.capStart, c.capDur);
 }
 function currentSelection() {
   const pick = state.selected && state.clips.find((c) => c.id === state.selected.clipId);
@@ -1017,8 +1121,8 @@ function renderClipList() {
         <button class="icon-btn rm" title="빼기" aria-label="이 영상 빼기">✕</button>
       </div>
       <div class="clip-fields">
-        <label class="mini">타이틀 카드 <small>"오늘은" 아래 큰 글씨. 비우면 바로 본편</small>
-          <span class="title-row"><span class="title-pre">오늘은</span><input type="text" class="f-title" maxlength="24" placeholder="산책하러 가는 날" aria-label="${idx + 1}번 영상 타이틀 문구 (오늘은 다음에 올 말)"></span></label>
+        <label class="mini">타이틀 카드 <small>자유롭게 한 줄. 비우면 바로 본편</small>
+          <input type="text" class="f-title plain" maxlength="30" placeholder="예) 오늘은 산책하러 가는 날" aria-label="${idx + 1}번 영상 제목 (자유롭게 한 줄, 비우면 제목 장면 없음)"></label>
         <label class="mini">도입부 자막 <small>반전이 있는 영상만. 위쪽에 작게 ${RULE.captionSec}초</small>
           <input type="text" class="f-cap plain" maxlength="40" placeholder="예) 그런데 갑자기…" aria-label="${idx + 1}번 영상 도입부 자막 (반전 있는 영상만)"></label>
         ${!vertSrc && !long && c.w ? `
@@ -1038,9 +1142,9 @@ function renderClipList() {
     c.noteEl = li.querySelector('.warn');
     setClipNote(c, c.note || '');
     const fT = li.querySelector('.f-title'); fT.value = c.title || '';
-    fT.addEventListener('input', () => { c.title = fT.value; });
+    fT.addEventListener('input', () => { c.title = fT.value; select(c, state.selected && state.selected.clipId === c.id ? state.selected.kind : 'main'); });
     const fC = li.querySelector('.f-cap'); fC.value = c.caption || '';
-    fC.addEventListener('input', () => { c.caption = fC.value; select(c, 'main'); });
+    fC.addEventListener('input', () => { c.caption = fC.value; select(c, state.selected && state.selected.clipId === c.id ? state.selected.kind : 'main'); });
     const fCrop = li.querySelector('.f-crop');
     if (fCrop) {
       fCrop.checked = !!c.cropShorts;
@@ -1082,7 +1186,8 @@ async function contactSheet(c, kind) {
     bg.fillStyle = '#000'; bg.fillRect(0, 0, W, H);
     drawVideo(bg, v, W, H, mode);
     if (state.watermark) drawWatermark(bg, W, H, out.fmt, 1);
-    if (c.caption && t < RULE.captionSec) drawCaption(bg, W, H, out.fmt, c.caption.trim(), 1.5);
+    const u = t - (c.trimIn || 0), cs = c.capStart || 0;
+    if (c.caption && u >= cs && u < cs + (c.capDur || RULE.captionSec)) drawCaption(bg, W, H, out.fmt, c.caption.trim(), cs + 1.5, cs, c.capDur);
     const x = pad + (i % cols) * (tw + pad), y = pad + Math.floor(i / cols) * (th + pad);
     g.drawImage(big, x, y, tw, th);
     g.fillStyle = 'rgba(47,46,43,.75)'; g.fillRect(x, y + th - 22, 56, 22);
@@ -1104,7 +1209,7 @@ async function addFiles(files) {
     v.currentTime = Math.min(1, (v.duration || 2) / 3);
     await new Promise((r) => { v.onseeked = r; setTimeout(r, 1500); });
     const clip = { id: ++clipSeq, origFile: file, url, name: file.name, w: v.videoWidth, h: v.videoHeight, dur: v.duration, thumb: v,
-      title: '', caption: '', cropShorts: false, cropX: 0.5,
+      title: '', caption: '', cropShorts: false, cropX: 0.5, capStart: 0, capDur: RULE.captionSec, trimIn: 0, trimOut: 0,
       // 원본이 재생되면 바로 쓸 수 있음. 소리 다듬기는 뒤에서.
       status: v.videoWidth ? 'ready' : 'preparing', note: '소리 다듬기 순서를 기다리는 중…' };
     state.clips.push(clip);
@@ -1127,36 +1232,37 @@ async function withRun(fn) {
 }
 
 function preview(clip, kind) {
-  withRun(async () => {
-    state.selected = { clipId: clip.id, kind };
-    const out = outputsOf(clip).find((o) => o.kind === kind);
-    $('stage').classList.toggle('vert', out.fmt === 'v');
-    $('stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    await runPlan(buildPlan(clip, out), { record: false, onProgress: (t, T) => { setBar(t / T); setStatus(`미리보기 ${fmtTime(t)} / ${fmtTime(T)}`); } });
-    setBar(0);
-  });
+  state.selected = { clipId: clip.id, kind };
+  $('studio').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  playRange(0, Infinity);
 }
 
 const results = [];
+// 한 편 만들기 (녹화). 같은 결과가 이미 있으면 새것으로 바꿔 끼움
+async function makeOne(c, o, label) {
+  if (state.clean && !c.prepFinished) {
+    setStatus(`${c.name} 소리 다듬기가 끝나길 기다리는 중…`);
+    await Promise.race([c.prepDone, sleep(5 * 60 * 1000)]);
+    if (stopFlag) return false;
+  }
+  state.selected = { clipId: c.id, kind: o.kind };
+  $('stage').classList.toggle('vert', o.fmt === 'v');
+  const r = await runPlan(buildPlan(c, o), { record: true, onProgress: (t, T) => { edHead(t, T); setBar(t / T); setStatus(`${label} · ${c.name} · ${o.label} · ${fmtTime(t)} / ${fmtTime(T)}`); } });
+  if (stopFlag || !r.blob) return false;
+  addResult(c, o, r);
+  return true;
+}
 $('exportBtn').addEventListener('click', () => withRun(async () => {
   const jobs = [];
   for (const c of state.clips.filter((x) => x.status === 'ready')) for (const o of outputsOf(c)) jobs.push({ c, o });
-  $('stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  for (let j = 0; j < jobs.length && !stopFlag; j++) {
-    const { c, o } = jobs[j];
-    if (state.clean && !c.prepFinished) {
-      setStatus(`${c.name} 소리 다듬기가 끝나길 기다리는 중…`);
-      await Promise.race([c.prepDone, sleep(5 * 60 * 1000)]);
-      if (stopFlag) break;
-    }
-    state.selected = { clipId: c.id, kind: o.kind };
-    $('stage').classList.toggle('vert', o.fmt === 'v');
-    const r = await runPlan(buildPlan(c, o), { record: true, onProgress: (t, T) => { setBar(t / T); setStatus(`${j + 1}/${jobs.length}편 만드는 중 · ${c.name} · ${o.label} · ${fmtTime(t)} / ${fmtTime(T)}`); } });
-    if (stopFlag || !r.blob) break;
-    addResult(c, o, r);
-  }
+  $('studio').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  let done = 0;
+  for (let j = 0; j < jobs.length && !stopFlag; j++) if (await makeOne(jobs[j].c, jobs[j].o, `${j + 1}/${jobs.length}편 만드는 중`)) done++;
   setBar(stopFlag ? 0 : 1);
-  if (!stopFlag) setTimeout(() => setStatus(`완성! 아래에서 ${jobs.length}편을 확인하고 내려받으세요`), 0);
+  if (!stopFlag && jobs.length) {
+    state.selected = { clipId: jobs[0].c.id, kind: jobs[0].o.kind }; ed.key = '';
+    setTimeout(() => setStatus(`완성! ${done}편이 아래에 있어요. 고칠 곳이 있으면 위에서 바로 고치고 '이 편 다시 만들기'를 눌러 주세요.`), 0);
+  }
 }));
 $('stopBtn').addEventListener('click', () => { stopFlag = true; });
 
@@ -1190,11 +1296,12 @@ function addResult(c, o, { blob, mime }) {
   const ul = $('results'); ul.hidden = false;
   const li = document.createElement('li');
   const shorts = o.fmt === 'v';
-  const title = (c.title || '').trim() ? `오늘은 ${c.title.trim()}` : '토순이 친구';
+  const title = (c.title || '').trim() || '토순이 친구';
+  const key = c.id + ':' + o.kind;
   li.innerHTML = `<video controls playsinline preload="metadata"></video>
     <div class="r-meta">
       <div class="name"></div><div class="sub"></div>
-      <div class="r-actions"><a class="btn small" download>내려받기</a><button class="btn ghost small yt-open">유튜브에 올리기</button></div>
+      <div class="r-actions"><a class="btn small" download>내려받기</a><button class="btn ghost small r-fix" type="button">고치기</button><button class="btn ghost small yt-open">유튜브에 올리기</button></div>
       <div class="yt-form" hidden>
         <label class="mini">제목<input type="text" class="plain yt-title" maxlength="100"></label>
         <label class="mini">설명<textarea class="plain yt-desc" rows="3"></textarea></label>
@@ -1214,8 +1321,349 @@ function addResult(c, o, { blob, mime }) {
   li.querySelector('.yt-desc').value = '토순이 친구 🐰\n\n#토순이친구 #반려토끼 #토끼' + (shorts ? ' #Shorts' : '');
   li.querySelector('.yt-open').addEventListener('click', () => { const f = li.querySelector('.yt-form'); f.hidden = !f.hidden; });
   li.querySelector('.yt-go').addEventListener('click', () => uploadToYouTube(li, blob, mime, shorts));
+  li.querySelector('.r-fix').addEventListener('click', () => {
+    state.selected = { clipId: c.id, kind: o.kind }; ed.key = '';
+    refresh(); $('studio').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   if (shorts) li.classList.add('vert');
-  ul.prepend(li);
+  li.dataset.key = key;
+  const old = ul.querySelector(`li[data-key="${key}"]`);
+  if (old) { const ov = old.querySelector('video'); if (ov && ov.src) URL.revokeObjectURL(ov.src); old.replaceWith(li); li.classList.add('fresh'); }
+  else ul.prepend(li);
+  edMakeLabel();
+}
+
+// ================================================================ 편집 화면: 타임라인(초) · 바로 고치기 · 이 편만 다시 만들기
+// 멈춘 채로 원하는 초를 끌어 보며 제목·자막·자막 시점·본편 앞뒤를 고친다. 그리는 방법은 만들기와 똑같아서 보이는 그대로 나온다.
+const ed = { plan: null, key: '', T: 0, cache: new Map(), busy: false, pending: null, corner: null, playing: false, buildTok: 0, ready: Promise.resolve(null) };
+const fmt1 = (s) => { s = Math.max(0, s || 0); const m = Math.floor(s / 60), r = s - m * 60; return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1); };
+const ROLE_LABEL = { opening: '오프닝', title: '제목', pause: '쉼표', main: '본편', ending: '마무리' };
+const mainOf = (plan) => plan && plan.segs.find((x) => x.kind === 'clip');
+
+function seekTo(v, t) {
+  return new Promise((r) => {
+    t = Math.max(0, Math.min(t, (v.duration || t + 1) - 0.02));
+    if (Math.abs(v.currentTime - t) < 0.012 && v.readyState >= 2) return r();
+    let done = false;
+    const fin = () => { if (done) return; done = true; v.removeEventListener('seeked', fin); r(); };
+    v.addEventListener('seeked', fin); v.currentTime = t; setTimeout(fin, 1500);
+  });
+}
+
+async function edBuild() {
+  const sel = currentSelection();
+  const ok = sel && sel.clip.status === 'ready';
+  $('editor').hidden = !ok;
+  if (!ok) { ed.plan = null; return null; }
+  const tok = ++ed.buildTok;
+  const plan = buildPlan(sel.clip, sel.out);
+  const words = plan.segs.map((x) => (x.text || '') + (x.caption || '')).join('') + (sel.clip.title || '') + (sel.clip.caption || '');
+  await Promise.all([
+    document.fonts.load('300 60px "Noto Sans KR"', 'TOSOONI 토순이 친구' + words),
+    document.fonts.load('400 40px "Noto Sans KR"', '토순이 친구' + words),
+    document.fonts.load('500 40px "Noto Sans KR"', words + '토순이'),
+  ]).catch(() => {});
+  await loadSegs(plan, ed.cache);
+  const corner = state.card && plan.fmt === 'v' ? null : await frameOverlay(plan.fmt, plan.W, plan.H).catch(() => null);
+  if (tok !== ed.buildTok) return null;
+  const key = sel.clip.id + ':' + sel.out.kind;
+  if (ed.key !== key) { ed.key = key; const m = mainOf(plan); ed.T = m ? m.start + Math.min(0.8, m.dur / 2) : 0; }
+  ed.plan = plan; ed.corner = corner;
+  ed.T = clamp(ed.T, 0, Math.max(0, plan.total - 0.04));
+  edTimeline(); edInspector(sel);
+  return plan;
+}
+
+// 타임라인 그리기: 장면 띠 + 자막 표시 + 눈금
+function edTimeline() {
+  const p = ed.plan; if (!p) return;
+  const tot = p.total || 1, pct = (x) => (x / tot * 100).toFixed(3) + '%';
+  $('tlBands').innerHTML = p.segs.map((x) => {
+    const role = x.role || (x.kind === 'clip' ? 'main' : 'title');
+    return `<div class="band b-${role}" style="left:${pct(x.start)};width:${pct(x.dur)}"><span>${ROLE_LABEL[role] || ''}</span></div>`;
+  }).join('');
+  const m = mainOf(p), cap = $('tlCap');
+  if (m && m.caption && !m.card) {
+    const a = m.start + (m.capStart || 0), d = Math.min(m.capDur || RULE.captionSec, m.start + m.dur - a);
+    cap.hidden = d <= 0; cap.style.left = pct(a); cap.style.width = pct(Math.max(0, d));
+  } else cap.hidden = true;
+  const step = tot > 120 ? 30 : tot > 60 ? 10 : tot > 20 ? 5 : 2;
+  let h = '';
+  for (let x = 0; x <= tot + 0.001; x += step) h += `<span style="left:${pct(x)}">${fmtTime(x)}</span>`;
+  $('tlTicks').innerHTML = h;
+  const r = $('tlRange'); r.max = String(Math.max(0.05, tot - 0.04));
+  $('edTotal').textContent = fmt1(tot);
+  edHead();
+  edMakeLabel();
+}
+function edHead(t, total) {
+  const tot = total || (ed.plan ? ed.plan.total : 1) || 1;
+  const T = t == null ? ed.T : t;
+  $('tlHead').style.left = (clamp(T / tot) * 100).toFixed(3) + '%';
+  $('edNow').textContent = fmt1(T);
+  if (document.activeElement !== $('tlRange')) $('tlRange').value = String(T);
+}
+function edMakeLabel() {
+  const has = !!document.querySelector(`#results li[data-key="${ed.key}"]`);
+  $('edMake').textContent = has ? '이 편 다시 만들기' : '이 편 만들기';
+}
+
+// 원하는 초로 (빨리 끌어도 마지막 위치만 그림)
+function edSeek(T) {
+  if (!ed.plan) return;
+  ed.T = clamp(T, 0, Math.max(0, ed.plan.total - 0.04));
+  edHead();
+  ed.pending = ed.T;
+  if (!ed.busy) edPump();
+}
+async function edPump() {
+  ed.busy = true;
+  try { while (ed.pending != null) { const T = ed.pending; ed.pending = null; await edPaint(T); } }
+  finally { ed.busy = false; }
+}
+async function edPaint(T) {
+  const p = ed.plan; if (!p || state.running) return;
+  const last = p.segs[p.segs.length - 1], waits = [];
+  for (const x of p.segs) {
+    if (x.el && T >= x.start - 0.01 && (T < x.start + x.dur || x === last)) waits.push(seekTo(x.el, (x.trimIn || 0) + clamp(T - x.start, 0, x.dur - 0.04)));
+    if (x.wipeEl && T >= x.wipeAt && T < x.wipeAt + (x.wipeEl.duration || 2)) waits.push(seekTo(x.wipeEl, T - x.wipeAt));
+  }
+  await Promise.all(waits);
+  if (state.running || p !== ed.plan) return;
+  if (screen.width !== p.W || screen.height !== p.H) { screen.width = p.W; screen.height = p.H; }
+  $('stage').classList.toggle('vert', p.fmt === 'v');
+  paintFrame(sctx, p, T, ed.corner);
+}
+
+// 재생: from~until 초 (소리 포함). 재생 중 누르면 멈춤
+function playRange(from, until, plan, onFrame) {
+  if (state.running) { stopFlag = true; return; }
+  const sel = currentSelection(); if (!sel && !plan) return;
+  ed.playing = true;
+  return withRun(async () => {
+    const p = plan || buildPlan(sel.clip, sel.out);
+    $('stage').classList.toggle('vert', p.fmt === 'v');
+    const r = await runPlan(p, { record: false, from, until, onProgress: (t, T) => { if (!plan) { ed.T = t; edHead(t, T); } setBar(t / T); setStatus(`재생 ${fmt1(t)} / ${fmt1(T)}`); if (onFrame) onFrame(); } });
+    if (!plan) ed.T = r.lastT;
+  }).finally(() => { ed.playing = false; setBar(0); $('edPlay').classList.remove('on'); });
+}
+$('edPlay').addEventListener('click', () => {
+  if (state.running) { stopFlag = true; return; }
+  if (!ed.plan) return;
+  playRange(ed.T >= ed.plan.total - 0.15 ? 0 : ed.T, Infinity);
+});
+$('edBack').addEventListener('click', () => edSeek(ed.T - 1));
+$('edFwd').addEventListener('click', () => edSeek(ed.T + 1));
+$('tlRange').addEventListener('input', (e) => { if (!state.running) edSeek(+e.target.value); });
+document.addEventListener('keydown', (e) => {
+  if ($('editor').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (/INPUT|TEXTAREA|SELECT/.test(tag) && e.target.id !== 'tlRange') return;
+  if (e.code === 'Space' && !/BUTTON/.test(tag)) { e.preventDefault(); $('edPlay').click(); }
+  else if (e.key === 'ArrowLeft' && !state.running) { e.preventDefault(); edSeek(ed.T - (e.shiftKey ? 1 / 30 : 1)); }
+  else if (e.key === 'ArrowRight' && !state.running) { e.preventDefault(); edSeek(ed.T + (e.shiftKey ? 1 / 30 : 1)); }
+});
+
+// 고친 뒤 다시 짜서 보여 주기. focus: 보여 줄 곳('title' | 'caption' | 'trimIn' | 'trimOut' | 'keep')
+let edTimer = 0;
+function edChanged(focus, delay = 220) {
+  clearTimeout(edTimer);
+  edTimer = setTimeout(async () => {
+    syncClipCards();
+    const p = await (ed.ready = edBuild());
+    if (!p) return;
+    const m = mainOf(p), ti = p.segs.find((x) => x.role === 'title');
+    let T = ed.T;
+    if (focus === 'title') T = ti ? ti.start + Math.min(2.0, ti.dur * 0.6) : (m ? m.start + 0.5 : 0);
+    else if (focus === 'caption' && m) T = m.start + (m.capStart || 0) + 1.2;
+    else if (focus === 'trimIn' && m) T = m.start + 0.4;
+    else if (focus === 'trimOut' && m) T = m.start + m.dur - 0.3;
+    edSeek(T);
+  }, delay);
+}
+// 01번 영상 카드의 입력칸도 같은 값으로
+function syncClipCards() {
+  const i = state.clips.findIndex((c) => ed.key.startsWith(c.id + ':'));
+  const li = $('clipList').children[i]; if (i < 0 || !li) return;
+  const c = state.clips[i];
+  const set = (q, v) => { const el = li.querySelector(q); if (el && document.activeElement !== el) el.value = v; };
+  set('.f-title', c.title || ''); set('.f-cap', c.caption || '');
+  set('.f-cropx', c.cropX); set('.f-cropn', Math.round(c.cropX * 100));
+}
+const selClip = () => { const s = currentSelection(); return s && s.clip; };
+
+function edInspector(sel) {
+  const c = sel.clip, m = mainOf(ed.plan);
+  const put = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = v; };
+  put('edTitle', c.title || ''); put('edCap', c.caption || '');
+  put('edCapDur', c.capDur || RULE.captionSec);
+  $('edCapAt').textContent = (c.capStart || 0).toFixed(1);
+  $('edTitle').placeholder = state.card && sel.out.fmt === 'v' ? '카드 맨 위 제목 · 예) 강아지를 만난 토끼' : '예) 오늘은 산책하러 가는 날';
+  // 본편 다듬기
+  const dur = c.dur || (m && m.el.duration) || 1;
+  const a = c.trimIn || 0, b = c.trimOut > 0 ? c.trimOut : dur;
+  for (const [id, v] of [['trimA', a], ['trimB', b]]) { const r = $(id); r.max = String(dur); if (document.activeElement !== r) r.value = String(v); }
+  $('shadeL').style.width = (a / dur * 100) + '%';
+  $('shadeR').style.width = ((dur - b) / dur * 100) + '%';
+  $('trimInfo').textContent = `${fmt1(a)} – ${fmt1(b)} · ${(b - a).toFixed(1)}초`;
+  $('trimReset').hidden = !(a > 0 || c.trimOut > 0);
+  drawStrip(c);
+  // 크롭
+  const crop = sel.out.kind === 'crop';
+  $('edCropRow').hidden = !crop;
+  if (crop) { put('edCrop', c.cropX); $('edCropVal').textContent = Math.round(c.cropX * 100) + '%'; }
+}
+
+// 본편 필름 띠: 원본 비율 그대로 칸칸이 (늘리지 않음). 한 장씩 뽑히는 대로 채워 감
+const STRIP_N = 10;
+async function drawStrip(c) {
+  if (!c.frames) {
+    c.frames = new Array(STRIP_N).fill(null);
+    (async () => {
+      try {
+        const v = await makeVideo(c.url, { muted: true }), fh = 112, fw = Math.max(1, Math.round(fh * c.w / c.h));
+        for (let i = 0; i < STRIP_N; i++) {
+          await seekTo(v, (c.dur || v.duration) * (i + 0.5) / STRIP_N);
+          await Promise.race([frameReady(v), sleep(220)]);
+          const f = document.createElement('canvas'); f.width = fw; f.height = fh;
+          f.getContext('2d').drawImage(v, 0, 0, fw, fh);
+          c.frames[i] = f;
+          const s = currentSelection(); if (s && s.clip === c) paintStrip(c);
+        }
+        dropVideo(v);
+      } catch (e) { console.error(e); }
+    })();
+  }
+  paintStrip(c);
+}
+function paintStrip(c) {
+  const cv = $('strip'), box = $('trim');
+  const Wd = Math.max(100, Math.round(box.clientWidth)), Hd = 56, dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (cv.width !== Wd * dpr) { cv.width = Wd * dpr; cv.height = Hd * dpr; }
+  const g = cv.getContext('2d'); g.fillStyle = '#E9E3D9'; g.fillRect(0, 0, cv.width, cv.height);
+  const th = Hd * dpr, tw = th * c.w / c.h, n = Math.ceil(cv.width / tw);
+  for (let i = 0; i < n; i++) {
+    const f = c.frames && c.frames[Math.min(STRIP_N - 1, Math.floor((i + 0.5) / n * STRIP_N))];
+    if (f) g.drawImage(f, i * tw, 0, tw, th);
+  }
+}
+
+$('edTitle').addEventListener('input', (e) => { const c = selClip(); if (!c) return; c.title = e.target.value; edChanged('title'); });
+$('edCap').addEventListener('input', (e) => { const c = selClip(); if (!c) return; c.caption = e.target.value; edChanged('caption'); });
+$('edCapDur').addEventListener('change', (e) => { const c = selClip(); if (!c) return; c.capDur = clamp(+e.target.value || RULE.captionSec, 1, 12); edChanged('caption', 0); });
+$('edCapHere').addEventListener('click', () => {
+  const c = selClip(), m = mainOf(ed.plan); if (!c || !m) return;
+  c.capStart = clamp(ed.T - m.start, 0, Math.max(0, m.dur - 1));
+  edChanged('caption', 0);
+});
+const srcAt = () => { const m = mainOf(ed.plan); return m ? (m.trimIn || 0) + clamp(ed.T - m.start, 0, m.dur) : 0; };
+function setTrim(c, a, b) {
+  const dur = c.dur || 1;
+  a = clamp(a, 0, dur - 0.5); b = clamp(b, a + 0.5, dur);
+  c.trimIn = a < 0.05 ? 0 : a; c.trimOut = b > dur - 0.05 ? 0 : b;
+}
+$('trimA').addEventListener('input', (e) => { const c = selClip(); if (!c) return; setTrim(c, +e.target.value, c.trimOut || c.dur); edInspector(currentSelection()); edChanged('trimIn', 120); });
+$('trimB').addEventListener('input', (e) => { const c = selClip(); if (!c) return; setTrim(c, c.trimIn || 0, +e.target.value); edInspector(currentSelection()); edChanged('trimOut', 120); });
+$('trimIn').addEventListener('click', () => { const c = selClip(); if (!c) return; setTrim(c, srcAt(), c.trimOut || c.dur); edChanged('trimIn', 0); });
+$('trimOut').addEventListener('click', () => { const c = selClip(); if (!c) return; setTrim(c, c.trimIn || 0, srcAt()); edChanged('trimOut', 0); });
+$('trimReset').addEventListener('click', () => { const c = selClip(); if (!c) return; c.trimIn = 0; c.trimOut = 0; edChanged('trimIn', 0); });
+$('edCrop').addEventListener('input', (e) => { const c = selClip(); if (!c) return; c.cropX = +e.target.value; $('edCropVal').textContent = Math.round(c.cropX * 100) + '%'; edChanged('keep', 60); });
+$('edMake').addEventListener('click', () => {
+  const sel = currentSelection(); if (!sel) return;
+  withRun(async () => {
+    const ok = await makeOne(sel.clip, sel.out, '이 편 만드는 중');
+    setBar(ok ? 1 : 0);
+    if (ok) setTimeout(() => setStatus('다 만들었어요. 아래 결과가 새것으로 바뀌었어요.'), 0);
+  });
+});
+window.addEventListener('resize', () => { const s = currentSelection(); if (s && !$('editor').hidden) paintStrip(s.clip); });
+
+// ================================================================ 스타일 고르기: 버튼마다 실제 모습 썸네일, 누르면 그 부분을 바로 재생
+const SAMPLE_TITLE = '산책하러 가는 날';
+// 멈춘 영상에서 새 위치의 그림이 실제로 준비될 때까지 (최대 0.6초)
+const frameReady = (v) => new Promise((r) => { if (v.requestVideoFrameCallback) { v.requestVideoFrameCallback(() => r()); setTimeout(r, 600); } else setTimeout(r, 120); });
+async function buildSwatches() {
+  const W = 1920, H = 1080;
+  await document.fonts.load('300 60px "Noto Sans KR"', 'TOSOONI 토순이 친구 ' + SAMPLE_TITLE).catch(() => {});
+  await document.fonts.load('400 40px "Noto Sans KR"', '토순이 친구').catch(() => {});
+  const shot = async (btn, draw, vert) => {
+    const [w, h] = vert ? [1080, 1920] : [W, H];
+    const big = document.createElement('canvas'); big.width = w; big.height = h;
+    const g = big.getContext('2d'); g.fillStyle = RULE.ivory; g.fillRect(0, 0, w, h);
+    try { await draw(g, w, h); } catch (e) { console.error(e); }
+    const label = btn.dataset.label || btn.textContent.trim();
+    btn.dataset.label = label;
+    btn.innerHTML = '<canvas class="sw"></canvas><span class="sw-l"></span>';
+    btn.querySelector('.sw-l').textContent = label;
+    const sw = btn.querySelector('.sw'), sh = vert ? 180 : 101;
+    sw.width = Math.round(sh * w / h) * 2; sw.height = sh * 2;
+    const sg = sw.getContext('2d'); sg.imageSmoothingQuality = 'high'; sg.drawImage(big, 0, 0, sw.width, sw.height);
+  };
+  const frameOf = (src, t, title) => async (g, w, h) => {
+    const v = await makeVideo(src, { muted: true }); await seekTo(v, Math.min(t, (v.duration || t) - 0.1)); await frameReady(v);
+    drawAsset(g, v, w, h); if (title) drawGreenTitleText(g, w, h, 'h', title, 2.6); dropVideo(v);
+  };
+  const btn = (seg, v) => $(seg).querySelector(`button[data-v="${v}"]`);
+  await shot(btn('themeSeg', 'classic'), (g, w, h) => drawClassicTitle(g, w, h, 'h', SAMPLE_TITLE, 2.2));
+  await shot(btn('themeSeg', 'autumn'), (g, w, h) => drawAutumnTitle(g, w, h, 'h', SAMPLE_TITLE, 2.4));
+  await shot(btn('themeSeg', 'botanical'), frameOf(ASSET.greenTitle.h, 2.6, SAMPLE_TITLE));
+  await shot(btn('openingSeg', 'minimal'), (g, w, h) => drawMinimalIntro(g, w, h, 'h', '', 2.3));
+  await shot(btn('openingSeg', 'intro4s'), frameOf(ASSET.opening.intro4s.h, 3.2));
+  await shot(btn('openingSeg', 'official'), frameOf(ASSET.opening.official.h, 10.0));
+  await shot(btn('openingSeg', 'botanical'), frameOf(ASSET.opening.botanical.h, 3.2));
+  await shot(btn('openingSeg', 'none'), (g, w, h) => { g.strokeStyle = '#D8D1C4'; g.lineWidth = 3; g.beginPath(); g.moveTo(w * 0.44, h / 2); g.lineTo(w * 0.56, h / 2); g.stroke(); });
+  await shot(btn('endingSeg', 'shorts'), async (g, w, h) => { const v = await makeVideo(ASSET.ending.v, { muted: true }); await seekTo(v, 1.6); await frameReady(v); drawAsset(g, v, w, h); dropVideo(v); }, true);
+  await shot(btn('endingSeg', 'none'), (g, w, h) => { g.strokeStyle = '#D8D1C4'; g.lineWidth = 4; g.beginPath(); g.moveTo(w * 0.4, h / 2); g.lineTo(w * 0.6, h / 2); g.stroke(); }, true);
+  paint('themeSeg', state.theme); paint('openingSeg', state.opening); paint('endingSeg', state.ending);
+}
+setTimeout(() => buildSwatches().catch((e) => console.error(e)), 300);
+
+// 누른 스타일이 들어가는 부분만 바로 재생
+// 누른 썸네일 안에서도 그대로 움직이게 (원본 비율 그대로, 남는 곳은 아이보리)
+function liveSwatch(btn) {
+  const sw = btn && btn.querySelector('.sw'); if (!sw) return { frame() {}, restore() {} };
+  const keep = document.createElement('canvas'); keep.width = sw.width; keep.height = sw.height; keep.getContext('2d').drawImage(sw, 0, 0);
+  const g = sw.getContext('2d');
+  return {
+    frame() {
+      g.fillStyle = RULE.ivory; g.fillRect(0, 0, sw.width, sw.height);
+      const k = Math.min(sw.width / screen.width, sw.height / screen.height), w = screen.width * k, h = screen.height * k;
+      g.drawImage(screen, (sw.width - w) / 2, (sw.height - h) / 2, w, h);
+    },
+    restore() { g.clearRect(0, 0, sw.width, sw.height); g.drawImage(keep, 0, 0); },
+  };
+}
+async function tasteStyle(key, btn) {
+  const live = liveSwatch(btn);
+  try { await tasteRun(key, live); } finally { live.restore(); }
+}
+async function tasteRun(key, live) {
+  const sel = currentSelection();
+  if (sel && sel.clip.status === 'ready') {
+    const p = await ed.ready; if (!p || state.running) return;
+    const m = mainOf(p), byRole = (r) => p.segs.find((x) => x.role === r);
+    let a = 0, b = p.total;
+    if (key === 'opening') { const o = byRole('opening'); if (!o) { a = 0; b = Math.min(p.total, 2); } else { a = 0; b = o.start + o.dur + 1.2; } }
+    else if (key === 'theme') { const t = byRole('title') || byRole('pause'); a = t ? t.start : Math.max(0, (m ? m.start : 0) - 0.5); b = (m ? m.start : a) + 2.2; }
+    else if (key === 'ending') { const e = byRole('ending'); a = e ? Math.max(0, e.start - 1.2) : Math.max(0, p.total - 2.5); b = p.total; }
+    ed.T = a; edSeek(a);
+    await playRange(a, b, undefined, () => live.frame());
+    return;
+  }
+  // 아직 영상이 없으면 견본으로 앞부분만
+  if (state.running) return;
+  if (key === 'ending') {
+    if (state.ending === 'none') return;
+    const [W, H] = SIZE.v;
+    await playRange(0, Infinity, { fmt: 'v', W, H, segs: [{ kind: 'asset', role: 'ending', src: ASSET.ending.v }], clip: null }, () => live.frame());
+    return;
+  }
+  const fake = { id: 0, title: SAMPLE_TITLE, caption: '', w: 1920, h: 1080, dur: 10 };
+  const p = buildPlan(fake, { kind: 'main', fmt: 'h' }, { noMain: true });
+  if (!p.segs.length) return;
+  $('stageEmpty').hidden = true;
+  await playRange(0, Infinity, p, () => live.frame());
+  $('stageEmpty').hidden = state.clips.length > 0;
 }
 
 // ================================================================ 유튜브 업로드 (구글 로그인 → YouTube Data API v3, 이어올리기 방식)

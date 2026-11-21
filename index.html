@@ -18,48 +18,6 @@
 </header>
 
 <main class="wrap">
-  <section class="hero" aria-label="빠른 시작">
-    <div class="guide">
-      <div class="toso-ava" aria-hidden="true">
-        <svg viewBox="0 0 40 40" focusable="false">
-          <circle cx="20" cy="20" r="19" fill="#EBDCD5" stroke="#BFA373" stroke-width="1.2"/>
-          <ellipse cx="12.6" cy="22.4" rx="3" ry="6.9" fill="#4A4845" transform="rotate(-18 12.6 22.4)"/>
-          <ellipse cx="27.4" cy="22.4" rx="3" ry="6.9" fill="#4A4845" transform="rotate(18 27.4 22.4)"/>
-          <ellipse cx="20" cy="20.4" rx="10.4" ry="9.4" fill="#4A4845"/>
-          <ellipse cx="20" cy="21.6" rx="8.5" ry="8.2" fill="#F7F3EC"/>
-          <circle cx="16.4" cy="21" r="1.4" fill="#2F2E2B"/>
-          <circle cx="23.6" cy="21" r="1.4" fill="#2F2E2B"/>
-          <ellipse cx="14.1" cy="24.1" rx="2" ry="1.2" fill="#F3C2C8" opacity=".9"/>
-          <ellipse cx="25.9" cy="24.1" rx="2" ry="1.2" fill="#F3C2C8" opacity=".9"/>
-          <path d="M20 24.1c1.4 0 2.3 1 2.3 2.1 0 1.3-1.1 2.3-2.3 2.3s-2.3-1-2.3-2.3c0-1.1.9-2.1 2.3-2.1z" fill="#E8A3AE"/>
-        </svg>
-      </div>
-      <div class="bubble"><span id="guideText">영상만 올려 주면, 비율은 내가 안 잘리게 맞출게!</span></div>
-    </div>
-    <div class="presets" id="presetRow" role="group" aria-label="한 번에 설정하는 프리셋">
-      <button class="preset" type="button" data-preset="card" aria-pressed="false">
-        <span class="p-emo" aria-hidden="true">🃏</span>
-        <span class="p-in"><b>카드 쇼츠</b><small>프로필·제목 카드</small></span>
-      </button>
-      <button class="preset" type="button" data-preset="shorts" aria-pressed="false">
-        <span class="p-emo" aria-hidden="true">🐰</span>
-        <span class="p-in"><b>세로 쇼츠</b><small>크림 카드</small></span>
-      </button>
-      <button class="preset" type="button" data-preset="vlog" aria-pressed="false">
-        <span class="p-emo" aria-hidden="true">🌿</span>
-        <span class="p-in"><b>가로 브이로그</b><small>공식 오프닝</small></span>
-      </button>
-      <button class="preset" type="button" data-preset="caption" aria-pressed="false">
-        <span class="p-emo" aria-hidden="true">✍️</span>
-        <span class="p-in"><b>자막·제목만</b><small>로고 없이</small></span>
-      </button>
-      <button class="preset" type="button" data-preset="autumn" aria-pressed="false">
-        <span class="p-emo" aria-hidden="true">🍂</span>
-        <span class="p-in"><b>가을 단풍</b><small>낙엽 전환</small></span>
-      </button>
-    </div>
-  </section>
-
   <section class="panel">
     <div class="step-head"><span class="num">01</span><h2>영상 올리기</h2></div>
     <label class="drop" id="drop">
@@ -102,8 +60,8 @@
     </div>
 
     <div class="field">
-      <label>테마</label>
-      <div class="seg" id="themeSeg">
+      <label>테마 <small>누르면 아래 미리보기에서 바로 재생돼요</small></label>
+      <div class="seg swatches" id="themeSeg">
         <button data-v="classic">클래식 · 아이보리</button>
         <button data-v="autumn">가을 · 단풍</button>
         <button data-v="botanical">보태니컬 · 그린</button>
@@ -113,7 +71,8 @@
 
     <div class="field">
       <label>시작 오프닝 <small>가로·쇼츠 모두 맨 앞에 붙어요</small></label>
-      <div class="seg" id="openingSeg">
+      <div class="seg swatches" id="openingSeg">
+        <button data-v="minimal">미니멀 인트로 3.4초</button>
         <button data-v="intro4s">4초 인트로</button>
         <button data-v="official">공식 오프닝 11.7초</button>
         <button data-v="botanical">보태니컬 오프닝</button>
@@ -123,7 +82,7 @@
 
     <div class="field">
       <label>쇼츠 끝</label>
-      <div class="seg" id="endingSeg">
+      <div class="seg swatches tall" id="endingSeg">
         <button data-v="shorts">토순이 엔딩 2.6초</button>
         <button data-v="none">없음</button>
       </div>
@@ -148,33 +107,91 @@
     </div>
   </section>
 
-  <section class="panel">
-    <div class="step-head"><span class="num">03</span><h2>미리보기 · 만들기</h2></div>
+  <section class="panel" id="studio">
+    <div class="step-head"><span class="num">03</span><h2>미리보기 · 고치기 · 만들기</h2></div>
+    <div class="pick-row" id="pickRow" hidden>
+      <select class="plain" id="pickSel" aria-label="볼 영상 고르기"></select>
+    </div>
     <div class="stage" id="stage">
       <canvas id="screen" width="1920" height="1080"></canvas>
-      <div class="stage-empty" id="stageEmpty">영상을 올리면 여기에서 미리 볼 수 있어요</div>
-      <div class="stage-fx" id="stageFx" aria-hidden="true">
-        <div class="stage-glow"></div>
-        <div class="cmp" id="cmpWrap" hidden><canvas id="cmpCanvas" width="296" height="296"></canvas><span class="cmp-tag">보정 전</span></div>
-      </div>
+      <div class="stage-empty" id="stageEmpty">영상을 올리면 여기에서 미리 보고 바로 고칠 수 있어요</div>
       <div class="stage-edit" id="stageEdit" hidden>
         <div class="edit-hot" data-edit="title" hidden><span class="edit-txt"></span><span class="edit-pen" aria-hidden="true">✎</span></div>
         <div class="edit-hot" data-edit="caption" hidden><span class="edit-txt"></span><span class="edit-pen" aria-hidden="true">✎</span></div>
       </div>
     </div>
-    <div class="stage-note">미리보기 위에 마우스를 올리면 커서 자리에 <b>보정 전</b> 원본이 동그랗게 비춰 보여요.</div>
+
+    <div class="editor" id="editor" hidden>
+      <div class="transport">
+        <button class="tp-play" id="edPlay" type="button" aria-label="재생 / 멈춤 (스페이스)">
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 5.5h3v13h-3zM13.5 5.5h3v13h-3z"/></svg>
+        </button>
+        <div class="tp-time" aria-live="off"><span id="edNow">0:00.0</span><span class="tp-sep">/</span><span id="edTotal">0:00.0</span></div>
+        <div class="tp-steps">
+          <button class="tp-step" id="edBack" type="button" aria-label="1초 뒤로">−1s</button>
+          <button class="tp-step" id="edFwd" type="button" aria-label="1초 앞으로">+1s</button>
+        </div>
+      </div>
+      <div class="tl" id="tl">
+        <div class="tl-cap" id="tlCap" hidden><span>자막</span></div>
+        <div class="tl-track"><div class="tl-bands" id="tlBands"></div></div>
+        <div class="tl-head" id="tlHead"></div>
+        <input type="range" class="tl-range" id="tlRange" min="0" max="10" step="0.01" value="0" aria-label="타임라인: 처음부터 몇 초">
+      </div>
+      <div class="tl-ticks" id="tlTicks" aria-hidden="true"></div>
+
+      <div class="insp">
+        <div class="insp-row">
+          <label for="edTitle">제목</label>
+          <div class="insp-ctl">
+            <input type="text" class="line" id="edTitle" maxlength="30" placeholder="예) 오늘은 산책하러 가는 날">
+            <div class="insp-sub">비우면 제목 장면 없이 바로 본편이에요.</div>
+          </div>
+        </div>
+        <div class="insp-row">
+          <label for="edCap">자막</label>
+          <div class="insp-ctl">
+            <input type="text" class="line" id="edCap" maxlength="40" placeholder="반전이 있을 때만 · 예) 그런데 갑자기…">
+            <div class="insp-sub">본편 <b id="edCapAt">0.0</b>초부터 <input type="number" class="num" id="edCapDur" min="1" max="12" step="0.5" aria-label="자막이 떠 있는 시간(초)">초 동안
+              <button class="link" id="edCapHere" type="button">지금 위치에서 시작</button></div>
+          </div>
+        </div>
+        <div class="insp-row">
+          <label>본편 다듬기</label>
+          <div class="insp-ctl">
+            <div class="trim" id="trim">
+              <canvas class="strip" id="strip"></canvas>
+              <div class="trim-shade" id="shadeL"></div><div class="trim-shade" id="shadeR"></div>
+              <input type="range" class="trim-r" id="trimA" min="0" max="10" step="0.05" aria-label="본편 시작 지점">
+              <input type="range" class="trim-r" id="trimB" min="0" max="10" step="0.05" aria-label="본편 끝 지점">
+            </div>
+            <div class="insp-sub"><span id="trimInfo"></span>
+              <button class="link" id="trimIn" type="button">지금 위치를 시작으로</button>
+              <button class="link" id="trimOut" type="button">지금 위치를 끝으로</button>
+              <button class="link" id="trimReset" type="button">되돌리기</button></div>
+          </div>
+        </div>
+        <div class="insp-row" id="edCropRow" hidden>
+          <label for="edCrop">크롭 위치</label>
+          <div class="insp-ctl crop-ctl"><span>왼쪽</span><input type="range" id="edCrop" min="0" max="1" step="0.01"><span>오른쪽</span><b id="edCropVal">50%</b></div>
+        </div>
+      </div>
+      <div class="ed-actions">
+        <button class="btn" id="edMake" type="button">이 편 만들기</button>
+        <span class="ed-note">스페이스 재생·멈춤 · ← → 1초 · 타임라인을 끌어 원하는 초로</span>
+      </div>
+    </div>
+
     <div class="bar"><div class="bar-fill" id="barFill"></div></div>
     <div class="status" id="status">영상을 올려 주세요</div>
-    <div class="pick-row" id="pickRow" hidden>
-      <select class="plain" id="pickSel"></select>
-    </div>
     <div class="actions">
-      <button class="btn ghost" id="previewBtn" disabled>미리보기</button>
+      <button class="btn ghost" id="previewBtn" hidden disabled>미리보기</button>
       <button class="btn" id="exportBtn" disabled>전부 만들기</button>
       <button class="btn ghost" id="stopBtn" hidden>멈추기</button>
     </div>
     <ul class="results" id="results" hidden></ul>
-    <p class="note">영상은 컴퓨터 밖으로 나가지 않고 이 브라우저 안에서만 만들어져요. 한 편을 만드는 데 그 영상 길이만큼 시간이 걸리니, 이 탭을 화면에 띄워 둔 채 기다려 주세요. 컴퓨터의 크롬을 권장해요.</p>
+    <p class="note">영상은 컴퓨터 밖으로 나가지 않고 이 브라우저 안에서만 만들어져요. 한 편을 만드는 데 그 영상 길이만큼 걸리니, 이 탭을 화면에 띄워 둔 채 기다려 주세요. 컴퓨터의 크롬을 권장해요.</p>
   </section>
 </main>
 

@@ -13,10 +13,11 @@
   const stage = $('stage');
   const screenCv = $('screen');
   const clipList = $('clipList');
-  const presetRow = $('presetRow');
-  const guideText = $('guideText');
-  if (!stage || !screenCv || !presetRow || !guideText) return;
-  const bubble = guideText.parentElement;
+  // 맨 위 프리셋·말풍선은 뺐어요(가로·세로는 앱이 알아서 정함). 없으면 보이지 않는 자리로 대신해요.
+  const presetRow = $('presetRow') || document.createElement('div');
+  const guideText = $('guideText') || document.createElement('span');
+  if (!stage || !screenCv) return;
+  const bubble = guideText.parentElement || document.createElement('div');
 
   // ---------------------------------------------------------------- 공통
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -258,7 +259,7 @@
         const sm = label.querySelector('small');
         if (sm && hint) sm.textContent = hint;
       };
-      set(t, on ? '카드 제목' : '타이틀 카드', on ? '카드 맨 위, 프로필 아래에 들어가요' : '"오늘은" 아래 큰 글씨. 비우면 바로 본편');
+      set(t, on ? '카드 제목' : '타이틀 카드', on ? '카드 맨 위, 프로필 아래에 들어가요' : '자유롭게 한 줄. 비우면 바로 본편');
       set(c, on ? '카드 자막' : '도입부 자막', on ? '영상 아래에 한 줄로 들어가요' : '반전이 있는 영상만. 위쪽에 작게 ' + 3.5 + '초');
     });
   }
@@ -351,6 +352,11 @@
     try { sel = currentSelection(); } catch (err) { sel = null; }
     if (!sel || !sel.out || sel.out.fmt !== 'v') return null;
     if (!sel.clip || !sel.clip.thumb || !sel.clip.thumb.videoWidth) return null;
+    // 편집 화면에서 본편이 아닌 곳(오프닝·엔딩)을 보고 있으면 글자 상자를 숨김
+    if (typeof ed !== 'undefined' && ed.plan) {
+      const m = ed.plan.segs.find((x) => x.kind === 'clip');
+      if (m && (ed.T < m.start || ed.T > m.start + m.dur)) return null;
+    }
     return sel;
   }
 
