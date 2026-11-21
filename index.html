@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>토순이 친구 스튜디오</title>
-<meta name="description" content="영상을 올리면 토순이 친구 오프닝, 타이틀, 테두리, 전환, 엔딩이 자동으로 입혀집니다.">
+<meta name="description" content="영상을 올리면 토순이 친구 규칙대로 한 편씩 깔끔하게 편집해 줍니다.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 27C6 20 3 14 6.5 9.5 9.5 6 14 7.5 16 11c2-3.5 6.5-5 9.5-1.5C29 14 26 20 16 27z' fill='%23E8A3AE'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,103 +18,81 @@
 </header>
 
 <main class="wrap">
-  <section class="panel" id="step1">
+  <section class="panel">
     <div class="step-head"><span class="num">01</span><h2>영상 올리기</h2></div>
     <label class="drop" id="drop">
       <input type="file" id="fileInput" accept="video/*" multiple hidden>
       <div class="drop-inner">
         <div class="drop-title">여기를 눌러 영상을 고르거나, 끌어다 놓으세요</div>
-        <div class="drop-hint">여러 개를 올리면 순서대로 이어 붙이고, 사이사이에 잎 전환이 들어가요.</div>
+        <div class="drop-hint">여러 개를 올려도 합치지 않고 한 편씩 따로 편집해요.<br>세로 영상은 쇼츠 1080×1920, 가로 영상과 3분이 넘는 영상은 1920×1080으로 만들어요.</div>
       </div>
     </label>
     <ul class="clips" id="clipList"></ul>
-    <div class="format-line" id="formatLine" hidden>
-      <span>화면 비율</span>
-      <div class="seg" id="formatSeg">
-        <button data-v="h">가로 1920×1080</button>
-        <button data-v="v">세로 쇼츠 1080×1920</button>
-      </div>
-      <span class="auto-note" id="autoNote"></span>
-    </div>
   </section>
 
-  <section class="panel" id="step2">
-    <div class="step-head"><span class="num">02</span><h2>꾸미기</h2></div>
+  <section class="panel">
+    <div class="step-head"><span class="num">02</span><h2>스타일</h2></div>
 
     <div class="field">
-      <label>오프닝</label>
+      <label>테마</label>
+      <div class="seg" id="themeSeg">
+        <button data-v="classic">클래식 · 아이보리</button>
+        <button data-v="botanical">보태니컬 · 그린</button>
+      </div>
+      <div class="note" id="themeNote"></div>
+    </div>
+
+    <div class="field">
+      <label>가로 영상 시작</label>
       <div class="seg" id="openingSeg">
+        <button data-v="intro4s">4초 인트로</button>
         <button data-v="official">공식 오프닝 11.7초</button>
-        <button data-v="intro4s">짧은 인트로 4초</button>
-        <button data-v="botanical">보태니컬 9.6초</button>
+        <button data-v="botanical">보태니컬 오프닝</button>
         <button data-v="none">없음</button>
       </div>
     </div>
 
     <div class="field">
-      <label for="titleText">타이틀 카드 <small>"오늘은" 아래 큰 글씨. 비우면 타이틀 없이 시작해요.</small></label>
-      <div class="title-row">
-        <span class="title-pre">오늘은</span>
-        <input type="text" id="titleText" maxlength="24" placeholder="산책하러 가는 날" value="">
-      </div>
-    </div>
-
-    <div class="field">
-      <label>본편 테두리</label>
-      <div class="seg" id="frameSeg">
-        <button data-v="corner">모서리만</button>
-        <button data-v="full">전체 테두리</button>
-        <button data-v="none">없음</button>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>화면 전환</label>
-      <div class="seg" id="transSeg">
-        <button data-v="wipe">잎 와이프 1.4초</button>
-        <button data-v="curtain">잎 커튼 1.6초</button>
-        <button data-v="none">없음</button>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>엔딩</label>
+      <label>쇼츠 끝</label>
       <div class="seg" id="endingSeg">
         <button data-v="shorts">토순이 엔딩 2.6초</button>
         <button data-v="none">없음</button>
       </div>
-      <div class="note" id="endingNote" hidden>가로 영상용 엔딩은 아직 없어서, 가로에서는 쇼츠 엔딩을 가운데에 놓고 양옆을 은은하게 채워요.</div>
     </div>
 
     <div class="field">
-      <label>소리</label>
+      <label>화면 위 표시</label>
       <div class="checks">
-        <label class="check"><input type="checkbox" id="normalize" checked> 음량 자동 맞추기 (-14 LUFS)</label>
-        <label class="check"><input type="checkbox" id="clipAudio" checked> 본편 원래 소리 넣기</label>
-        <label class="check"><input type="checkbox" id="sfx" checked> 전환 효과음 넣기</label>
+        <label class="check"><input type="checkbox" id="watermark" checked> TOSOONI 작은 로고</label>
+        <label class="check"><input type="checkbox" id="grade" checked> 은은한 웜톤 보정</label>
+        <label class="check" id="frameCheck"><input type="checkbox" id="frame"> 보태니컬 모서리 테두리</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>소리 <small>BGM은 넣지 않아요. 직접 넣으실 수 있게 비워 둬요.</small></label>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="clean" checked> 다듬기: 바람 클리핑 복원 · 150Hz 이하 컷 · 노이즈 제거</label>
+        <label class="check"><input type="checkbox" id="muteHiss" checked> 말소리 없이 '쉬—' 잡음만 있으면 원음 음소거</label>
+        <label class="check"><input type="checkbox" id="normalize" checked> 음량 -14 LUFS로 맞추기</label>
       </div>
     </div>
   </section>
 
-  <section class="panel" id="step3">
+  <section class="panel">
     <div class="step-head"><span class="num">03</span><h2>미리보기 · 만들기</h2></div>
     <div class="stage" id="stage">
       <canvas id="screen" width="1920" height="1080"></canvas>
       <div class="stage-empty" id="stageEmpty">영상을 올리면 여기에서 미리 볼 수 있어요</div>
     </div>
     <div class="bar"><div class="bar-fill" id="barFill"></div></div>
-    <div class="status" id="status">총 길이 계산 전</div>
+    <div class="status" id="status">영상을 올려 주세요</div>
     <div class="actions">
-      <button class="btn ghost" id="previewBtn" disabled>미리보기</button>
-      <button class="btn" id="exportBtn" disabled>영상 만들기</button>
+      <button class="btn" id="exportBtn" disabled>전부 만들기</button>
       <button class="btn ghost" id="stopBtn" hidden>멈추기</button>
     </div>
-    <div class="result" id="result" hidden>
-      <video id="resultVideo" controls playsinline></video>
-      <a class="btn" id="downloadLink" download>내려받기</a>
-      <div class="note" id="resultNote"></div>
-    </div>
-    <p class="note">영상은 컴퓨터 밖으로 나가지 않고 이 브라우저 안에서만 만들어져요. 만드는 동안 영상 길이만큼 시간이 걸리니, 이 탭을 화면에 띄워 둔 채 기다려 주세요. 크롬이나 사파리 최신 버전을 권장해요.</p>
+    <ul class="results" id="results" hidden></ul>
+    <p class="note">영상은 컴퓨터 밖으로 나가지 않고 이 브라우저 안에서만 만들어져요. 한 편을 만드는 데 그 영상 길이만큼 시간이 걸리니, 이 탭을 화면에 띄워 둔 채 기다려 주세요. 컴퓨터의 크롬을 권장해요.</p>
   </section>
 </main>
 
