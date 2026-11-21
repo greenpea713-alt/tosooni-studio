@@ -108,7 +108,7 @@ input.plain:focus{border-color:var(--gold)}
 
 /* ---------- 빠른 시작: 토순이 가이드 + 원클릭 프리셋 ---------- */
 .hero{position:relative;isolation:isolate;overflow:hidden;background:var(--card);border:1px solid var(--pearl);padding:20px 22px 22px}
-.hero:before{content:"";position:absolute;inset:0;z-index:-1;opacity:.6;pointer-events:none;background:
+.hero:before{content:"";position:absolute;inset:0;z-index:-1;opacity:.85;pointer-events:none;background:
   radial-gradient(340px 220px at 92% -18%, #FBE7DE 0%, rgba(251,231,222,0) 70%),
   radial-gradient(320px 220px at -10% 118%, #E9F0E3 0%, rgba(233,240,227,0) 72%)}
 @media (max-width:600px){.hero{padding:16px 16px 18px}}
