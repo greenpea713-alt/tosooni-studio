@@ -195,9 +195,7 @@ function paperTexture(W, H, color = RULE.ivory) {
   if (papers.has(key)) return papers.get(key);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
-  g.fillStyle = color; g.fillRect(0, 0, W, H);
-  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < W * H * 0.02; i++) { g.fillStyle = rnd() < .5 ? 'rgba(255,255,255,.25)' : 'rgba(120,105,85,.05)'; g.fillRect(rnd() * W, rnd() * H, 1, 1); }
+  g.fillStyle = color; g.fillRect(0, 0, W, H);   // 매끈한 단색 배경 (종이 얼룩·노이즈 없음)
   papers.set(key, c); return c;
 }
 const CLASSIC_TITLE_SEC = 3.6;
