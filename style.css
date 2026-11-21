@@ -98,3 +98,5 @@ input.plain:focus{border-color:var(--gold)}
 .yt-msg a{color:var(--charcoal)}
 @media (max-width:600px){.results li{flex-direction:column}.results video{max-width:100%;width:100%}.results li.vert video{width:60%}}
 .pick-row{margin-top:12px}.pick-row select{width:100%;padding:9px 10px;font-size:13px}
+.crop-row input.f-cropn{flex:none;width:64px;padding:5px 8px;font-size:13px}
+.clip-card .sheet{width:100%;border:1px solid var(--pearl);margin-top:4px}

@@ -842,17 +842,19 @@ function renderClipList() {
           <div class="sub outs">${outs.map((o) => '→ ' + o.label).join('<br>')}</div>
           <div class="sub warn" hidden></div>
         </div>
-        <button class="icon-btn rm" title="빼기">✕</button>
+        <button class="icon-btn rm" title="빼기" aria-label="이 영상 빼기">✕</button>
       </div>
       <div class="clip-fields">
         <label class="mini">타이틀 카드 <small>"오늘은" 아래 큰 글씨. 비우면 바로 본편</small>
-          <span class="title-row"><span class="title-pre">오늘은</span><input type="text" class="f-title" maxlength="24" placeholder="산책하러 가는 날"></span></label>
+          <span class="title-row"><span class="title-pre">오늘은</span><input type="text" class="f-title" maxlength="24" placeholder="산책하러 가는 날" aria-label="${idx + 1}번 영상 타이틀 문구 (오늘은 다음에 올 말)"></span></label>
         <label class="mini">도입부 자막 <small>반전이 있는 영상만. 위쪽에 작게 ${RULE.captionSec}초</small>
-          <input type="text" class="f-cap plain" maxlength="40" placeholder="예) 그런데 갑자기…"></label>
+          <input type="text" class="f-cap plain" maxlength="40" placeholder="예) 그런데 갑자기…" aria-label="${idx + 1}번 영상 도입부 자막 (반전 있는 영상만)"></label>
         ${!vertSrc && !long && c.w ? `
-        <label class="check"><input type="checkbox" class="f-crop"> 세로 크롭 쇼츠도 만들기 <small>토끼가 잘리지 않을 때만</small></label>
-        <div class="crop-row" ${c.cropShorts ? '' : 'hidden'}><span>왼쪽</span><input type="range" class="f-cropx" min="0" max="1" step="0.01"><span>오른쪽</span></div>` : ''}
-        <div class="prev-row">${outs.map((o) => `<button class="btn ghost small f-prev" data-kind="${o.kind}">▶ 미리보기 · ${o.kind === 'crop' ? '크롭 쇼츠' : o.fmt === 'v' ? '쇼츠' : '가로'}</button>`).join('')}</div>
+        <label class="check"><input type="checkbox" class="f-crop" aria-label="${idx + 1}번 영상 세로 크롭 쇼츠도 만들기"> 세로 크롭 쇼츠도 만들기 <small>토끼가 잘리지 않을 때만</small></label>
+        <div class="crop-row" ${c.cropShorts ? '' : 'hidden'}><span>왼쪽</span><input type="range" class="f-cropx" min="0" max="1" step="0.01" aria-label="${idx + 1}번 크롭 위치 슬라이더"><span>오른쪽</span>
+          <input type="number" class="plain f-cropn" min="0" max="100" step="1" aria-label="${idx + 1}번 크롭 위치 퍼센트 (0 왼쪽 끝, 50 가운데, 100 오른쪽 끝)"><span>%</span></div>` : ''}
+        <div class="prev-row">${outs.map((o) => { const nm = o.kind === 'crop' ? '크롭 쇼츠' : o.fmt === 'v' ? '쇼츠' : '가로'; return `<button class="btn ghost small f-prev" data-kind="${o.kind}" aria-label="${idx + 1}번 ${nm} 미리보기">▶ 미리보기 · ${nm}</button><button class="btn ghost small f-sheet" data-kind="${o.kind}" aria-label="${idx + 1}번 ${nm} 장면 모음 보기">▦ 장면 모음 · ${nm}</button>`; }).join('')}</div>
+        <img class="sheet" hidden alt="${idx + 1}번 영상 장면 모음">
       </div>`;
     li.querySelector('.name').textContent = `${idx + 1}. ${c.name}`;
     if (c.thumb && c.thumb.videoWidth) {
@@ -871,8 +873,10 @@ function renderClipList() {
     if (fCrop) {
       fCrop.checked = !!c.cropShorts;
       fCrop.addEventListener('change', () => { c.cropShorts = fCrop.checked; if (c.cropShorts) state.selected = { clipId: c.id, kind: 'crop' }; renderClipList(); refresh(); });
-      const fx = li.querySelector('.f-cropx'); fx.value = c.cropX;
-      fx.addEventListener('input', () => { c.cropX = +fx.value; select(c, 'crop'); });
+      const fx = li.querySelector('.f-cropx'), fn = li.querySelector('.f-cropn');
+      fx.value = c.cropX; fn.value = Math.round(c.cropX * 100);
+      fx.addEventListener('input', () => { c.cropX = +fx.value; fn.value = Math.round(c.cropX * 100); select(c, 'crop'); });
+      fn.addEventListener('change', () => { c.cropX = clamp((+fn.value || 0) / 100); fx.value = c.cropX; fn.value = Math.round(c.cropX * 100); select(c, 'crop'); });
     }
     li.querySelector('.rm').addEventListener('click', () => {
       state.clips.splice(state.clips.indexOf(c), 1);
@@ -880,10 +884,41 @@ function renderClipList() {
       renderClipList(); refresh();
     });
     li.querySelectorAll('.f-prev').forEach((b) => b.addEventListener('click', () => preview(c, b.dataset.kind)));
+    if (c.sheetUrl) { const im = li.querySelector('.sheet'); im.src = c.sheetUrl; im.hidden = false; }
+    li.querySelectorAll('.f-sheet').forEach((b) => b.addEventListener('click', () => contactSheet(c, b.dataset.kind)));
     const busy = c.status !== 'ready';
     li.querySelectorAll('.f-prev').forEach((b) => { b.disabled = busy || state.running; });
     ul.append(li);
   });
+}
+// 장면 모음: 결과물과 같은 화면 배치로 6장면을 한 장에 (토끼 잘림·로고·자막 위치를 한눈에)
+async function contactSheet(c, kind) {
+  const out = outputsOf(c).find((o) => o.kind === kind);
+  if (!out) return;
+  const [W, H] = SIZE[out.fmt], vertSrc = c.h > c.w;
+  const mode = kind === 'crop' ? { cropX: c.cropX } : (vertSrc && out.fmt === 'h') ? 'contain' : 'cover';
+  const cols = 3, rows = 2, tw = out.fmt === 'v' ? 270 : 480, th = Math.round(tw * H / W), pad = 8;
+  const sheet = document.createElement('canvas');
+  sheet.width = cols * tw + (cols + 1) * pad; sheet.height = rows * th + (rows + 1) * pad;
+  const g = sheet.getContext('2d'); g.fillStyle = RULE.ivory; g.fillRect(0, 0, sheet.width, sheet.height);
+  const big = document.createElement('canvas'); big.width = W; big.height = H; const bg = big.getContext('2d');
+  const v = await makeVideo(c.url, { muted: true });
+  for (let i = 0; i < cols * rows; i++) {
+    const t = (c.dur || v.duration) * (i + 0.5) / (cols * rows);
+    v.currentTime = t;
+    await new Promise((r) => { v.onseeked = r; setTimeout(r, 2000); });
+    bg.fillStyle = '#000'; bg.fillRect(0, 0, W, H);
+    drawVideo(bg, v, W, H, mode);
+    if (state.watermark) drawWatermark(bg, W, H, out.fmt, 1);
+    if (c.caption && t < RULE.captionSec) drawCaption(bg, W, H, out.fmt, c.caption.trim(), 1.5);
+    const x = pad + (i % cols) * (tw + pad), y = pad + Math.floor(i / cols) * (th + pad);
+    g.drawImage(big, x, y, tw, th);
+    g.fillStyle = 'rgba(47,46,43,.75)'; g.fillRect(x, y + th - 22, 56, 22);
+    g.fillStyle = '#fff'; g.font = '400 13px "Noto Sans KR"'; g.fillText(fmtTime(t), x + 8, y + th - 7);
+  }
+  dropVideo(v);
+  c.sheetUrl = sheet.toDataURL('image/jpeg', 0.85);
+  renderClipList();
 }
 function select(c, kind) { state.selected = { clipId: c.id, kind }; drawStill(); }
 
