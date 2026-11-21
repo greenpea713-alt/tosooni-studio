@@ -209,7 +209,7 @@ input.plain:focus{border-color:var(--gold)}
 .edit-hot{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:8px;
   transform:translateY(-50%);border-radius:10px;padding:3px 10px;border:1px dashed transparent;
   transition:border-color .18s ease,background .18s ease;cursor:text;overflow:hidden}
-.edit-hot:hover,.edit-hot:focus-within{border-color:rgba(232,163,174,.85);background:rgba(255,253,249,.55)}
+.edit-hot:hover,.edit-hot:focus-within{border-color:rgba(232,163,174,.9);background:rgba(255,253,249,.16);box-shadow:0 0 0 3px rgba(232,163,174,.10)}
 .edit-hot .edit-txt{display:block;width:100%;text-align:center;color:transparent;overflow:hidden;white-space:nowrap}
 .edit-hot .edit-pen{position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:12px;color:#B98F86;
   opacity:0;transition:opacity .18s ease;pointer-events:none}
