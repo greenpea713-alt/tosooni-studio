@@ -511,13 +511,18 @@ function refresh() {
   $('formatLine').hidden = state.clips.length === 0;
   $('stage').classList.toggle('vert', state.format === 'v');
   $('stageEmpty').hidden = state.clips.length > 0;
-  const has = state.clips.length > 0;
+  const busy = state.clips.some((c) => c.converting || c.failed);
+  const has = state.clips.length > 0 && !busy;
   $('previewBtn').disabled = !has || state.running;
   $('exportBtn').disabled = !has || state.running;
   $('stopBtn').hidden = !state.running;
   document.querySelectorAll('.seg button, #titleText, .icon-btn, .check input').forEach((b) => { b.disabled = state.running; });
   if (!state.running) {
-    if (has) {
+    if (state.clips.some((c) => c.failed)) {
+      setProgress(0, '변환하지 못한 영상이 있어요. 목록에서 빼고 다시 해 주세요.');
+    } else if (busy) {
+      setProgress(0, '영상을 변환하는 중이에요. 끝나면 미리보기와 영상 만들기를 누를 수 있어요.');
+    } else if (has) {
       const plan = buildPlan();
       setProgress(0, `총 길이 약 ${fmtTime(plan.total)} · ${state.format === 'v' ? '세로 1080×1920' : '가로 1920×1080'} · 30fps`);
     } else setProgress(0, '총 길이 계산 전');
@@ -554,8 +559,9 @@ function renderClipList() {
     const meta = document.createElement('div');
     meta.className = 'meta';
     const orient = c.h > c.w ? '세로' : '가로';
-    meta.innerHTML = `<div class="name"></div><div class="sub">${idx + 1}번 · ${fmtTime(c.dur)} · ${orient} ${c.w}×${c.h}</div>`;
+    meta.innerHTML = `<div class="name"></div><div class="sub">${idx + 1}번 · ${fmtTime(c.dur)}${c.w ? ` · ${orient} ${c.w}×${c.h}` : ''}</div><div class="sub warn" hidden></div>`;
     meta.querySelector('.name').textContent = c.name;
+    if (c.note) { const w = meta.querySelector('.warn'); w.hidden = false; w.textContent = c.note; c.noteEl = w; }
     const ctl = document.createElement('div');
     ctl.className = 'ctl';
     const mk = (label, title, fn, dis) => {
@@ -586,7 +592,12 @@ async function addFiles(files) {
       await new Promise((r) => { v.onseeked = r; setTimeout(r, 1500); });
       const clip = { id: ++clipSeq, file, url, name: file.name, w: v.videoWidth, h: v.videoHeight, dur: v.duration, thumb: v };
       state.clips.push(clip);
-      if (state.normalize) lufsOfClip(clip); // 미리 재 두기
+      if (!v.videoWidth) {
+        // 소리만 읽히고 화면은 못 읽는 영상(대개 아이폰·갤럭시 고효율 HEVC) → 자동 변환
+        clip.converting = true;
+        clip.note = '이 브라우저가 읽을 수 없는 형식이라 변환을 기다리는 중…';
+        convertQueue = convertQueue.then(() => convertClip(clip));
+      } else if (state.normalize) lufsOfClip(clip); // 미리 재 두기
     } catch (e) {
       URL.revokeObjectURL(url);
       alertNote(`"${file.name}"을(를) 열지 못했어요. 아이폰 HEVC 영상이라면 크롬 대신 사파리에서 열거나, 호환 형식(H.264)으로 저장해 주세요.`);
@@ -595,7 +606,7 @@ async function addFiles(files) {
   // 첫 영상의 방향으로 화면 비율 자동 결정
   if (!state.formatTouched && state.clips.length) {
     const c = state.clips[0];
-    state.format = c.h > c.w ? 'v' : 'h';
+    if (c.w) state.format = c.h > c.w ? 'v' : 'h';
     applyFormatDefaults();
     $('autoNote').textContent = `첫 영상이 ${state.format === 'v' ? '세로' : '가로'}라서 자동으로 골랐어요`;
   }
@@ -604,6 +615,67 @@ async function addFiles(files) {
 }
 
 function alertNote(msg) { setStatus(msg); }
+
+// ---------------------------------------------------------------- 변환 (ffmpeg.wasm, 필요할 때만 불러옴)
+let convertQueue = Promise.resolve();
+let ffmpegP = null;
+function loadFFmpeg() {
+  if (!ffmpegP) ffmpegP = (async () => {
+    await new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = 'vendor/ffmpeg/ffmpeg.js';
+      sc.onload = res;
+      sc.onerror = () => rej(new Error('변환 도구를 불러오지 못했어요'));
+      document.head.append(sc);
+    });
+    const ff = new FFmpegWASM.FFmpeg();
+    const base = new URL('vendor/ffmpeg/', location.href).href;
+    await ff.load({ coreURL: base + 'ffmpeg-core.js', wasmURL: base + 'ffmpeg-core.wasm' });
+    return ff;
+  })().catch((e) => { ffmpegP = null; throw e; });
+  return ffmpegP;
+}
+function clipNote(clip, txt) {
+  clip.note = txt;
+  if (clip.noteEl) { clip.noteEl.hidden = !txt; clip.noteEl.textContent = txt; }
+}
+async function convertClip(clip) {
+  if (!state.clips.includes(clip)) return;
+  try {
+    clipNote(clip, '변환 도구를 불러오는 중… (처음 한 번만 30MB 정도 받아요)');
+    const ff = await loadFFmpeg();
+    clipNote(clip, '읽을 수 있는 형식으로 바꾸는 중… 0%');
+    const onProg = ({ progress }) => clipNote(clip, `읽을 수 있는 형식으로 바꾸는 중… ${Math.round(clamp(progress) * 100)}%`);
+    ff.on('progress', onProg);
+    const ext = (clip.name.match(/\.\w+$/) || ['.mov'])[0];
+    await ff.writeFile('in' + ext, new Uint8Array(await clip.file.arrayBuffer()));
+    // 긴 변이 1920을 넘지 않게 줄이고, 30fps H.264로
+    await ff.exec(['-i', 'in' + ext,
+      '-vf', "scale='if(gte(iw,ih),min(1920,iw),-2)':'if(gte(iw,ih),-2,min(1920,ih))',fps=30,format=yuv420p",
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', 'out.mp4']);
+    ff.off('progress', onProg);
+    const data = await ff.readFile('out.mp4');
+    await ff.deleteFile('in' + ext).catch(() => {});
+    await ff.deleteFile('out.mp4').catch(() => {});
+    const file = new File([data], clip.name.replace(/\.\w+$/, '') + '.mp4', { type: 'video/mp4' });
+    const url = URL.createObjectURL(file);
+    const v = await makeVideo(url, { muted: true });
+    if (!v.videoWidth) throw new Error('변환 후에도 화면을 읽지 못했어요');
+    v.currentTime = Math.min(0.5, (v.duration || 1) / 2);
+    URL.revokeObjectURL(clip.url);
+    Object.assign(clip, { file, url, w: v.videoWidth, h: v.videoHeight, dur: v.duration, thumb: v, converting: false });
+    lufsCache.delete('clip:' + clip.id);
+    clipNote(clip, '');
+    if (!state.formatTouched && state.clips[0] === clip) { state.format = clip.h > clip.w ? 'v' : 'h'; applyFormatDefaults(); }
+    if (state.normalize) lufsOfClip(clip);
+  } catch (e) {
+    console.error(e);
+    Object.assign(clip, { converting: false, failed: true });
+    clipNote(clip, '변환하지 못했어요. 휴대폰에서 "호환성 우선"(H.264)으로 저장해 다시 올려 주세요.');
+  }
+  renderClipList();
+  refresh();
+}
 
 $('fileInput').addEventListener('change', (e) => { addFiles(e.target.files); e.target.value = ''; });
 const drop = $('drop');
