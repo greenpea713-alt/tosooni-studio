@@ -476,7 +476,7 @@ async function runPlan(plan, { record, onProgress }) {
     if (!window.MediaRecorder) throw new Error('이 브라우저는 영상 저장을 지원하지 않아요. 컴퓨터의 크롬으로 열어 주세요.');
     const stream = screen.captureStream(30);
     dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-    mime = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+    mime = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.4d0028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
       .find((m) => MediaRecorder.isTypeSupported(m)) || '';
     rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: 16_000_000, audioBitsPerSecond: 192_000 });
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
