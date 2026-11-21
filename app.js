@@ -69,9 +69,10 @@ const shelf = document.createElement('div');
 shelf.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:0.01;pointer-events:none;';
 document.body.append(shelf);
 
-function makeVideo(src, { muted = false } = {}) {
+function makeVideo(src, opts) { return makeMedia('video', src, opts); }
+function makeMedia(tag, src, { muted = false } = {}) {
   return new Promise((res, rej) => {
-    const v = document.createElement('video');
+    const v = document.createElement(tag);
     v.preload = 'auto'; v.playsInline = true; v.muted = muted; v.crossOrigin = 'anonymous';
     v.style.cssText = 'width:2px;height:2px';
     v.src = src;
@@ -327,55 +328,71 @@ let prepQueue = Promise.resolve();
 
 function setClipNote(clip, txt) { clip.note = txt; if (clip.noteEl) { clip.noteEl.textContent = txt; clip.noteEl.hidden = !txt; } }
 
+const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+
+// 업로드 직후 뒤에서 돈다. 원본이 재생되면 바로 '준비됨'이고, 소리 다듬기는 끝나는 대로 붙는다.
 async function prepareClip(clip) {
   if (!state.clips.includes(clip)) return;
   const needVideo = !clip.w;          // 화면을 못 읽는 형식(HEVC 등)
-  const ff = await (setClipNote(clip, '편집 도구를 불러오는 중… (처음 한 번 30MB)'), loadFFmpeg());
-  const ext = (clip.name.match(/\.\w+$/) || ['.mov'])[0].toLowerCase();
-  const inName = 'in' + clip.id + ext;
+  const fail = (msg) => {
+    clip.prepFinished = true;
+    if (needVideo) { clip.status = 'failed'; setClipNote(clip, '이 영상은 이 브라우저에서 읽지 못했어요. 휴대폰에서 "호환성 우선"(H.264)으로 저장해 다시 올려 주세요.'); }
+    else { clip.audio = null; setClipNote(clip, '소리 다듬기를 못 해서 원래 소리로 만들어요' + (msg ? ` (${msg})` : '')); }
+  };
+  let ff;
+  try {
+    setClipNote(clip, '편집 도구를 불러오는 중… (처음 한 번 30MB)');
+    ff = await withTimeout(loadFFmpeg(), 120000, '불러오기 시간 초과');
+  } catch (e) { console.error(e); fail(e.message); return; }
+
+  const dir = '/m' + clip.id;
   let lastProg = 0;
   const onProg = ({ progress }) => { lastProg = progress; };
   ff.on('progress', onProg);
   const tick = setInterval(() => { if (clip.stage) setClipNote(clip, `${clip.stage} ${Math.round(clamp(lastProg) * 100)}%`); }, 400);
   try {
-    await ff.writeFile(inName, new Uint8Array(await clip.origFile.arrayBuffer()));
-    // 1) 소리 꺼내서 다듬기 (원본/다듬은 것 둘 다)
+    // 원본을 메모리에 통째로 복사하지 않고 그대로 읽게 연결 (큰 영상·아이폰 대비)
+    await ff.createDir(dir);
+    await ff.mount('WORKERFS', { files: [clip.origFile] }, dir);
+    const inPath = dir + '/' + clip.origFile.name;
     clip.stage = '소리 다듬는 중…'; lastProg = 0;
-    const rc = await ff.exec(['-i', inName, '-vn', '-ac', '2', '-ar', '48000', '-filter_complex', `[0:a:0]asplit[a][b];[b]${RULE.audioFilter}[c]`,
-      '-map', '[a]', 'raw.wav', '-map', '[c]', 'clean.wav']);
-    let hasAudio = rc === 0;
-    if (hasAudio) {
-      const raw = await ff.readFile('raw.wav'), clean = await ff.readFile('clean.wav');
-      const [lr, lc] = await Promise.all([lufsOfBuffer(raw.buffer.slice(0)), lufsOfBuffer(clean.buffer.slice(0))]);
-      clip.audio = { rawLufs: lr, cleanLufs: lc, hissOnly: lr < RULE.silentLufs || lr - lc >= RULE.hissDropDb };
+    const rc = await ff.exec(['-i', inPath, '-vn', '-filter_complex', `[0:a:0]asplit[a][b];[b]${RULE.audioFilter}[c]`,
+      '-map', '[a]', '-ar', '48000', '-c:a', 'pcm_s16le', 'raw.wav', '-map', '[c]', '-ar', '48000', '-c:a', 'pcm_s16le', 'clean.wav']);
+    if (rc === 0) {
+      clip.stage = '소리 확인하는 중…';
+      const raw = await ff.readFile('raw.wav'), wav = await ff.readFile('clean.wav');
+      await ff.deleteFile('raw.wav').catch(() => {});
+      const rawL = await lufsOfBuffer(raw.buffer.slice(0)), cleanL = await lufsOfBuffer(wav.buffer.slice(0));
+      const hissOnly = rawL < RULE.silentLufs || rawL - cleanL >= RULE.hissDropDb;
+      clip.audio = { rawLufs: rawL, cleanLufs: cleanL, hissOnly };
+      if (!needVideo) clip.cleanAudio = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
     } else clip.audio = { none: true };
-    // 2) 다듬은 소리를 영상에 다시 붙이기 (화면을 못 읽는 형식이면 이때 H.264로)
-    clip.stage = needVideo ? '읽을 수 있는 형식으로 바꾸는 중…' : '정리하는 중…'; lastProg = 0;
-    const vArgs = needVideo
-      ? ['-vf', "scale='if(gte(iw,ih),min(1920,iw),-2)':'if(gte(iw,ih),-2,min(1920,ih))',fps=30,format=yuv420p", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18']
-      : ['-c:v', 'copy'];
-    const args = hasAudio
-      ? ['-i', inName, '-i', 'clean.wav', '-map', '0:v:0', '-map', '1:a:0', ...vArgs, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', 'out.mp4']
-      : ['-i', inName, '-map', '0:v:0', ...vArgs, '-movflags', '+faststart', 'out.mp4'];
-    if ((await ff.exec(args)) !== 0) throw new Error('정리 실패');
-    const data = await ff.readFile('out.mp4');
-    const file = new File([data], clip.name.replace(/\.\w+$/, '') + '.mp4', { type: 'video/mp4' });
-    const url = URL.createObjectURL(file);
-    const v = await makeVideo(url, { muted: true });
-    if (!v.videoWidth) throw new Error('화면을 읽지 못했어요');
-    clip.prep = { file, url, w: v.videoWidth, h: v.videoHeight, dur: v.duration };
-    dropVideo(v);
-    if (needVideo) Object.assign(clip, { w: clip.prep.w, h: clip.prep.h, dur: clip.prep.dur });
-    clip.status = 'ready';
+
+    if (needVideo) {
+      clip.stage = '읽을 수 있는 형식으로 바꾸는 중…'; lastProg = 0;
+      const vArgs = ['-vf', "scale='if(gte(iw,ih),min(1920,iw),-2)':'if(gte(iw,ih),-2,min(1920,ih))',fps=30,format=yuv420p", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18'];
+      const args = clip.audio.none
+        ? ['-i', inPath, '-map', '0:v:0', ...vArgs, '-movflags', '+faststart', 'out.mp4']
+        : ['-i', inPath, '-i', 'clean.wav', '-map', '0:v:0', '-map', '1:a:0', ...vArgs, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', 'out.mp4'];
+      if ((await ff.exec(args)) !== 0) throw new Error('변환 실패');
+      const data = await ff.readFile('out.mp4');
+      const url = URL.createObjectURL(new Blob([data], { type: 'video/mp4' }));
+      const v = await makeVideo(url, { muted: true });
+      if (!v.videoWidth) throw new Error('화면을 읽지 못했어요');
+      v.currentTime = Math.min(1, v.duration / 3);
+      await new Promise((r) => { v.onseeked = r; setTimeout(r, 1500); });
+      dropVideo(clip.thumb);
+      Object.assign(clip, { url, w: v.videoWidth, h: v.videoHeight, dur: v.duration, thumb: v, embeddedClean: !clip.audio.none, status: 'ready' });
+    }
     setClipNote(clip, clip.audio.none ? '원본에 소리가 없어요'
-      : clip.audio.hissOnly ? "잡음만 있는 소리라 원음을 끌게요 (설정에서 바꿀 수 있어요)" : '소리 다듬기 완료');
+      : clip.audio.hissOnly ? '잡음만 있는 소리라 원음을 끌게요' : '소리 다듬기 완료');
   } catch (e) {
-    console.error(e);
-    if (needVideo) { clip.status = 'failed'; setClipNote(clip, '이 영상은 읽지 못했어요. 휴대폰에서 "호환성 우선"(H.264)으로 저장해 다시 올려 주세요.'); }
-    else { clip.status = 'ready'; clip.audio = null; setClipNote(clip, '소리 다듬기를 못 해서 원래 소리로 만들어요'); }
+    console.error(e); fail(e.message);
   } finally {
+    clip.prepFinished = true;
     clearInterval(tick); clip.stage = null; ff.off('progress', onProg);
-    for (const f of [inName, 'raw.wav', 'clean.wav', 'out.mp4']) await ff.deleteFile(f).catch(() => {});
+    for (const f of ['raw.wav', 'clean.wav', 'out.mp4']) await ff.deleteFile(f).catch(() => {});
+    await ff.unmount(dir).catch(() => {}); await ff.deleteDir(dir).catch(() => {});
     renderClipList(); refresh();
   }
 }
@@ -397,7 +414,6 @@ function buildPlan(clip, out) {
   const fmt = out.fmt, [W, H] = SIZE[fmt];
   const botan = state.theme === 'botanical';
   const segs = [];
-  const useSrc = clip.prep && state.clean ? clip.prep : null;
   const vertSrc = clip.h > clip.w;
 
   if (fmt === 'h' && state.opening !== 'none') segs.push({ kind: 'asset', src: pickSrc(ASSET.opening[state.opening], 'h') });
@@ -407,7 +423,7 @@ function buildPlan(clip, out) {
     else segs.push({ kind: 'still', role: 'title', dur: CLASSIC_TITLE_SEC, text: title });
   }
   const main = {
-    kind: 'clip', src: useSrc ? useSrc.url : clip.url, clip,
+    kind: 'clip', src: clip.url, clip,
     mode: out.kind === 'crop' ? { cropX: clip.cropX } : (vertSrc && fmt === 'h') ? 'contain' : 'cover',
     caption: (clip.caption || '').trim(),
   };
@@ -456,10 +472,16 @@ async function runPlan(plan, { record, onProgress }) {
       let g = 1;
       if (s.kind === 'clip') {
         const a = clip.audio;
-        if (state.clean && a && a.hissOnly && state.muteHiss) g = 0;
-        else if (state.normalize) g = gainFor(state.clean && a && !a.none ? a.cleanLufs : await lufsOfUrl(clip.url));
+        const useClean = (state.clean || clip.embeddedClean) && a && !a.none;
+        if (useClean && a.hissOnly && state.muteHiss) g = 0;
+        else if (state.normalize) g = gainFor(useClean ? a.cleanLufs : await lufsOfUrl(clip.url));
+        // 다듬은 소리는 따로 재생하고 영상의 원래 소리는 끈다
+        if (state.clean && clip.cleanAudio) {
+          s.audioEl = await makeMedia('audio', clip.cleanAudio);
+          s.gain = route(s.audioEl, g); route(s.el, 0);
+        }
       } else if (state.normalize) g = gainFor(await lufsOfUrl(s.src));
-      s.gain = route(s.el, g); s.g0 = g;
+      if (!s.gain) s.gain = route(s.el, g);
     }
     s.start = Math.max(0, T0 - (s.xfade || 0));
     T0 = s.start + s.dur;
@@ -520,8 +542,9 @@ async function runPlan(plan, { record, onProgress }) {
       const T = performance.now() / 1000 - t0;
       if (stopFlag || T >= total + 0.05) { fin = true; resolve(); return; }
       for (const s of segs) {
-        if (s.el && !s.started && T >= s.start) { s.started = true; play(s.el); if (s.fadeOut) s.gain.gain.setTargetAtTime(0, ac.currentTime + Math.max(0, s.dur - s.fadeOut), s.fadeOut / 3); }
-        if (s.el && s.started && !s.stopped && T >= s.start + s.dur + 0.1) { s.stopped = true; s.el.pause(); }
+        if (s.audioEl && s.started && !s.stopped && Math.abs(s.audioEl.currentTime - s.el.currentTime) > 0.12) s.audioEl.currentTime = s.el.currentTime;
+        if (s.el && !s.started && T >= s.start) { s.started = true; play(s.el); if (s.audioEl) play(s.audioEl); if (s.fadeOut) s.gain.gain.setTargetAtTime(0, ac.currentTime + Math.max(0, s.dur - s.fadeOut), s.fadeOut / 3); }
+        if (s.el && s.started && !s.stopped && T >= s.start + s.dur + 0.1) { s.stopped = true; s.el.pause(); if (s.audioEl) s.audioEl.pause(); }
         if (s.wipeEl && !s.wipeStarted && T >= s.wipeAt) { s.wipeStarted = true; play(s.wipeEl); }
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
@@ -544,7 +567,7 @@ async function runPlan(plan, { record, onProgress }) {
     blob = new Blob(chunks, { type: (mime || 'video/webm').split(';')[0] });
   }
   try { limiter.disconnect(); master.disconnect(); nodes.forEach((n) => n.disconnect()); } catch (e) {}
-  for (const s of segs) { dropVideo(s.el); dropVideo(s.wipeEl); }
+  for (const s of segs) { dropVideo(s.el); dropVideo(s.wipeEl); dropVideo(s.audioEl); }
   return { blob, mime, total };
 }
 
@@ -573,14 +596,14 @@ function refresh() {
   if (state.theme !== 'botanical') state.frame = false;
   $('frame').checked = state.frame;
   const ready = state.clips.filter((c) => c.status === 'ready');
-  const busy = state.clips.some((c) => c.status === 'preparing' || c.status === 'queued');
+  const busy = state.clips.some((c) => c.status === 'preparing');
   $('exportBtn').disabled = state.running || !ready.length || busy;
   $('stopBtn').hidden = !state.running;
   $('stageEmpty').hidden = state.clips.length > 0;
   document.querySelectorAll('.seg button, .check input, .clip-card input, .clip-card button').forEach((b) => { b.disabled = state.running; });
   if (!state.running) {
     if (!state.clips.length) setStatus('영상을 올려 주세요');
-    else if (busy) setStatus('영상을 준비하는 중이에요. 끝나면 미리보기와 만들기를 누를 수 있어요.');
+    else if (busy) setStatus('읽을 수 없는 형식이라 변환하는 중이에요. 끝나면 미리보기와 만들기를 누를 수 있어요.');
     else {
       const n = ready.reduce((a, c) => a + outputsOf(c).length, 0);
       setStatus(`영상 ${n}편을 만들 준비가 됐어요`);
@@ -693,19 +716,11 @@ async function addFiles(files) {
     v.currentTime = Math.min(1, (v.duration || 2) / 3);
     await new Promise((r) => { v.onseeked = r; setTimeout(r, 1500); });
     const clip = { id: ++clipSeq, origFile: file, url, name: file.name, w: v.videoWidth, h: v.videoHeight, dur: v.duration, thumb: v,
-      title: '', caption: '', cropShorts: false, cropX: 0.5, status: 'queued', note: '준비 순서를 기다리는 중…' };
+      title: '', caption: '', cropShorts: false, cropX: 0.5,
+      // 원본이 재생되면 바로 쓸 수 있음. 소리 다듬기는 뒤에서.
+      status: v.videoWidth ? 'ready' : 'preparing', note: '소리 다듬기 순서를 기다리는 중…' };
     state.clips.push(clip);
-    prepQueue = prepQueue.then(async () => {
-      if (!state.clips.includes(clip)) return;
-      if (!state.clean && clip.w) { clip.status = 'ready'; setClipNote(clip, ''); renderClipList(); refresh(); return; }
-      clip.status = 'preparing'; refresh();
-      await prepareClip(clip);
-      // 변환된 경우 썸네일도 새로
-      if (!clip.thumb.videoWidth && clip.prep) {
-        const nv = await makeVideo(clip.prep.url, { muted: true }).catch(() => null);
-        if (nv) { nv.currentTime = Math.min(1, nv.duration / 3); await new Promise((r) => { nv.onseeked = r; setTimeout(r, 1500); }); dropVideo(clip.thumb); clip.thumb = nv; clip.url = clip.prep.url; renderClipList(); refresh(); }
-      }
-    });
+    clip.prepDone = prepQueue = prepQueue.then(() => prepareClip(clip)).catch((e) => console.error(e));
   }
   renderClipList(); refresh();
 }
@@ -741,6 +756,11 @@ $('exportBtn').addEventListener('click', () => withRun(async () => {
   $('stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
   for (let j = 0; j < jobs.length && !stopFlag; j++) {
     const { c, o } = jobs[j];
+    if (state.clean && !c.prepFinished) {
+      setStatus(`${c.name} 소리 다듬기가 끝나길 기다리는 중…`);
+      await Promise.race([c.prepDone, sleep(5 * 60 * 1000)]);
+      if (stopFlag) break;
+    }
     state.selected = { clipId: c.id, kind: o.kind };
     $('stage').classList.toggle('vert', o.fmt === 'v');
     const r = await runPlan(buildPlan(c, o), { record: true, onProgress: (t, T) => { setBar(t / T); setStatus(`${j + 1}/${jobs.length}편 만드는 중 · ${c.name} · ${o.label} · ${fmtTime(t)} / ${fmtTime(T)}`); } });
