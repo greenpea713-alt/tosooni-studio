@@ -190,3 +190,30 @@ input.plain:focus{border-color:var(--gold)}
   input[type=text],input[type=number],textarea{cursor:text}
   button:disabled,.btn:disabled{cursor:url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2228%22%20height=%2228%22%20viewBox=%220%200%2028%2028%22>%20<g%20stroke=%22%233A3835%22%20stroke-width=%22.95%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22>%20<path%20d=%22M16.9%2017.2c1.6-2.6%204.6-3.6%207.2-2.4-1.1%202.9-4.1%204.1-7.2%202.4z%22%20fill=%22%239DBE86%22/>%20<path%20d=%22M17.6%2019.4c2.2-.9%204.7-.2%206.1%201.7-2%201.8-4.9%201.5-6.1-1.7z%22%20fill=%22%23B4D19B%22/>%20<path%20d=%22M2.5%202.5c4.6%202.4%209.4%206.4%2012.4%209.5%202.1%202.1%202.4%205%20.3%206.8-2.1%201.8-5.1%201.2-6.8-.9C6.5%2014.7%204%208.7%202.5%202.5z%22%20fill=%22%23F2A868%22/>%20</g>%20<path%20d=%22M7.7%208.7l2.6%202.2M6.8%2012l2.4%202.1%22%20stroke=%22%23D98A4A%22%20stroke-width=%22.85%22%20stroke-linecap=%22round%22%20fill=%22none%22/>%20</svg>") 2 2, not-allowed}
 }
+
+/* ---------- 카드 쇼츠 설정 (크림 카드 · 네모 박스 · 영상 크기 · 프로필) ---------- */
+.card-field{border:1px solid var(--pearl);background:#FFFDF9;padding:16px 16px 14px;margin-bottom:22px}
+.card-field>label{margin-bottom:10px}
+.card-opts{margin-top:12px;display:flex;flex-direction:column;gap:11px;border-top:1px dashed var(--pearl);padding-top:13px}
+.card-opts[hidden]{display:none}
+.card-opts .check{font-size:13.5px}
+.card-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+.card-lab{color:var(--dove);font-size:12px;min-width:52px}
+.card-row input[type=range]{flex:1;min-width:130px;accent-color:var(--rose);cursor:pointer}
+.card-val{font-size:12px;color:var(--charcoal);min-width:40px;text-align:right;font-variant-numeric:tabular-nums}
+.card-opts .note{margin-top:0}
+.preset.is-card .p-emo{background:radial-gradient(circle at 34% 28%,#FFF3E9,#F7E2D3)}
+
+/* ---------- 미리보기 위에서 제목·자막 바로 고치기 ---------- */
+.stage-edit{position:absolute;inset:0;z-index:4;pointer-events:none}
+.edit-hot{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:8px;
+  transform:translateY(-50%);border-radius:10px;padding:3px 10px;border:1px dashed transparent;
+  transition:border-color .18s ease,background .18s ease;cursor:text;overflow:hidden}
+.edit-hot:hover,.edit-hot:focus-within{border-color:rgba(232,163,174,.85);background:rgba(255,253,249,.55)}
+.edit-hot .edit-txt{display:block;width:100%;text-align:center;color:transparent;overflow:hidden;white-space:nowrap}
+.edit-hot .edit-pen{position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:12px;color:#B98F86;
+  opacity:0;transition:opacity .18s ease;pointer-events:none}
+.edit-hot:hover .edit-pen{opacity:1}
+.edit-hot.empty .edit-txt{color:rgba(140,133,124,.55)}
+.edit-input{width:100%;border:0;outline:none;background:transparent;text-align:center;font-family:inherit;
+  color:var(--charcoal);padding:0;border-bottom:1px solid rgba(232,163,174,.9)}

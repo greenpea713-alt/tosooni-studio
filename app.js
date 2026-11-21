@@ -42,6 +42,8 @@ const state = {
   watermark: true, grade: true, frame: false,
   clean: true, muteHiss: true, normalize: true,
   running: false,
+  // 카드 레이아웃 (세로 쇼츠를 크림 카드에 담기). 기본은 꺼짐 = 지금까지의 결과물 그대로.
+  card: false, cardFrame: true, cardIcon: 'default', cardScale: 0.56,
   selected: null,   // {clipId, kind:'main'|'crop'} 미리보기 대상
 };
 let clipSeq = 0;
@@ -186,6 +188,133 @@ function drawCaption(ctx, W, H, fmt, text, t) {
   centerText(ctx, text, W / 2, vert ? H * 0.135 : 150, px * 0.04);
   ctx.restore();
   resetFont(ctx);
+}
+
+// ---------------------------------------------------------------- 카드 레이아웃 (크림 카드 + 동그란 프로필 + 제목 + 영상 + 자막)
+// 사용자가 좋아하는 '카드형 쇼츠' 모양. state.card 가 켜졌고 세로 결과물일 때만 쓴다.
+const CARD = { paper: '#FAF6EE', panel: '#FFFCF6', ink: '#2F2E2B', sub: '#5A554D', line: '#E7DFD2', footer: '#8E8B85' };
+function roundRectPath(g, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  g.beginPath();
+  g.moveTo(x + rr, y);
+  g.arcTo(x + w, y, x + w, y + h, rr);
+  g.arcTo(x + w, y + h, x, y + h, rr);
+  g.arcTo(x, y + h, x, y, rr);
+  g.arcTo(x, y, x + w, y, rr);
+  g.closePath();
+}
+// 카드 안 자리 — 그리기와 미리보기 편집 상자가 같은 값을 쓰도록 한 곳에서 계산
+function cardLayout(W, H, clip, kind) {
+  const pad = Math.round(W * 0.045), inset = Math.round(W * 0.030);
+  const innerX = pad + inset, innerW = W - innerX * 2;
+  const hasIcon = state.cardIcon !== 'none';
+  const iconR = Math.round(W * 0.062);
+  const iconCy = pad + Math.round(H * 0.030) + iconR;
+  const titlePx = Math.round(W * 0.050);
+  const topOfTitle = hasIcon ? iconCy + iconR + Math.round(H * 0.018) : pad + Math.round(H * 0.048);
+  const titleY = Math.round(topOfTitle + titlePx * 0.78);
+  const videoTop = titleY + Math.round(H * 0.035);
+  const captionPx = Math.round(W * 0.042);
+  const footerY = H - Math.round(H * 0.062);
+  const captionY = footerY - Math.round(H * 0.140);
+  const availH = Math.max(Math.round(H * 0.2), captionY - captionPx - Math.round(H * 0.010) - videoTop);
+  const srcW = kind === 'crop' ? 9 : (clip && clip.w ? clip.w : 9);
+  const srcH = kind === 'crop' ? 16 : (clip && clip.h ? clip.h : 16);
+  let vw = Math.min(innerW, Math.round(W * clamp(state.cardScale, 0.3, 0.95)));
+  let vh = Math.round(vw * srcH / srcW);
+  if (vh > availH) { vh = availH; vw = Math.round(vh * srcW / srcH); }
+  vw = Math.max(1, vw); vh = Math.max(1, vh);
+  return {
+    pad, radius: Math.round(W * 0.032), hasIcon, iconR, iconCy,
+    title: { y: titleY, px: titlePx, maxW: W * 0.80 },
+    video: { x: Math.round((W - vw) / 2), y: videoTop, w: vw, h: vh },
+    caption: { y: captionY, px: captionPx, maxW: W * 0.80 },
+    footerY,
+  };
+}
+// 프로필 사진: 기본은 앱의 동그란 토순이 아이콘, 사진을 고르면 그 사진을 동그랗게
+const cardIconCache = { src: '', img: null };
+function cardIconImage() {
+  const src = state.cardIcon;
+  if (typeof src !== 'string' || !src || src === 'default' || src === 'none') return null;
+  if (cardIconCache.src !== src) {
+    const im = new Image();
+    im.onload = () => { try { if (!state.running) drawStill(); } catch (e) {} };
+    im.src = src;
+    cardIconCache.src = src; cardIconCache.img = im;
+  }
+  return cardIconCache.img;
+}
+function drawCardBase(g, W, H) {
+  g.fillStyle = CARD.paper; g.fillRect(0, 0, W, H);
+  if (!state.cardFrame) return;
+  const pad = Math.round(W * 0.045), r = Math.round(W * 0.032);
+  g.save();
+  g.shadowColor = 'rgba(92,78,62,0.13)';
+  g.shadowBlur = Math.round(W * 0.030);
+  g.shadowOffsetY = Math.round(W * 0.008);
+  roundRectPath(g, pad, pad, W - pad * 2, H - pad * 2, r);
+  g.fillStyle = CARD.panel; g.fill();
+  g.restore();
+  g.save();
+  roundRectPath(g, pad, pad, W - pad * 2, H - pad * 2, r);
+  g.strokeStyle = CARD.line; g.lineWidth = Math.max(1, W * 0.0013); g.stroke();
+  g.restore();
+}
+function drawCardIcon(g, cx, cy, r) {
+  if (state.cardIcon === 'none') return;
+  const img = cardIconImage();
+  if (img && img.complete && img.naturalWidth) {
+    g.save();
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip();
+    const s = Math.max((r * 2) / img.naturalWidth, (r * 2) / img.naturalHeight);
+    const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+    g.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+    g.restore();
+    g.beginPath(); g.arc(cx, cy, r - Math.max(1, r * 0.02), 0, Math.PI * 2);
+    g.strokeStyle = 'rgba(191,163,115,0.6)'; g.lineWidth = Math.max(1, r * 0.035); g.stroke();
+    return;
+  }
+  drawTosooniIcon(g, cx, cy, r);
+}
+function drawCardText(g, text, y, px, weight, clampW, color) {
+  const s = String(text || '').trim();
+  if (!s) return;
+  const lsR = 0.03;
+  const size = fitPx(g, s, weight, px, clampW, lsR);
+  g.fillStyle = color; g.textBaseline = 'alphabetic';
+  centerText(g, s, g.canvas ? g.canvas.width / 2 : 0, y, size * lsR);
+  resetFont(g);
+}
+// 카드 한 장 그리기: 배경·테두리 → 프로필 → 제목 → 영상 → 자막 → TOSOONI
+function drawCard(g, W, H, clip, el, caption, kind) {
+  const L = cardLayout(W, H, clip, kind);
+  drawCardBase(g, W, H);
+  drawCardIcon(g, W / 2, L.iconCy, L.iconR);
+  drawCardText(g, clip.title, L.title.y, L.title.px, 500, L.title.maxW, CARD.ink);
+  const box = L.video;
+  if (el && el.videoWidth) {
+    g.save();
+    roundRectPath(g, box.x, box.y, box.w, box.h, Math.round(box.w * 0.045));
+    g.clip();
+    if (state.grade && 'filter' in g) g.filter = 'sepia(0.07) saturate(1.04) brightness(1.01)';
+    g.translate(box.x, box.y);
+    drawVideo(g, el, box.w, box.h, kind === 'crop' ? { cropX: clip.cropX } : 'cover');
+    g.filter = 'none';
+    g.restore();
+    g.save();
+    roundRectPath(g, box.x, box.y, box.w, box.h, Math.round(box.w * 0.045));
+    g.strokeStyle = 'rgba(60,52,44,0.10)'; g.lineWidth = Math.max(1, W * 0.0015); g.stroke();
+    g.restore();
+  }
+  drawCardText(g, caption, L.caption.y, L.caption.px, 400, L.caption.maxW, CARD.sub);
+  if (state.watermark) {
+    const px = Math.max(10, Math.round(W * 0.024)), ls = px * 0.45;
+    setFont(g, 300, px, ls);
+    g.fillStyle = CARD.footer; g.textBaseline = 'alphabetic';
+    centerText(g, 'TOSOONI', W / 2, L.footerY, ls);
+    resetFont(g);
+  }
 }
 
 // ---------------------------------------------------------------- 클래식 타이틀 카드 (아이보리 종이, 골드 선, 작은 하트)
@@ -613,26 +742,27 @@ async function frameOverlay(fmt, W, H) {
 function buildPlan(clip, out) {
   const fmt = out.fmt, [W, H] = SIZE[fmt];
   const botan = state.theme === 'botanical', autumn = state.theme === 'autumn';
+  const cardOn = !!state.card && fmt === 'v';   // 카드에서는 제목이 카드 안에 있어요
   const segs = [];
   const vertSrc = clip.h > clip.w;
 
   if (state.opening !== 'none') segs.push({ kind: 'asset', src: pickSrc(ASSET.opening[state.opening], fmt) });   // 가로·쇼츠 모두 오프닝부터
   const title = (clip.title || '').trim();
-  if (title) {
+  if (title && !cardOn) {
     if (botan) segs.push({ kind: 'asset', role: 'title', src: pickSrc(ASSET.greenTitle, fmt), text: title });
     else if (autumn) segs.push({ kind: 'still', role: 'title', style: 'autumn', dur: AUTUMN.titleSec, text: title });
     else segs.push({ kind: 'still', role: 'title', dur: CLASSIC_TITLE_SEC, text: title });
   }
   const classic = !botan && !autumn;
   // 클래식: 오프닝 뒤 타이틀이 없으면 가운데 동그란 토순이 아이콘 카드로 한 번 쉬어 감
-  if (classic && !title && segs.length) segs.push({ kind: 'still', style: 'icon', dur: ICON_CARD_SEC });
+  if (classic && !title && segs.length && !cardOn) segs.push({ kind: 'still', style: 'icon', dur: ICON_CARD_SEC });
   const main = {
-    kind: 'clip', src: clip.url, clip,
+    kind: 'clip', src: clip.url, clip, card: cardOn,
     mode: out.kind === 'crop' ? { cropX: clip.cropX } : (vertSrc && fmt === 'h') ? 'contain' : 'cover',
     caption: (clip.caption || '').trim(),
   };
   const intoMain = segs.length > 0;
-  if (intoMain) { if (botan) segs[segs.length - 1].wipe = true; else if (autumn) main.leafIn = true; else main.fadeIn = RULE.fadeInFromIvory; }
+  if (intoMain) { if (botan) segs[segs.length - 1].wipe = true; else if (autumn && !cardOn) main.leafIn = true; else main.fadeIn = RULE.fadeInFromIvory; }
   segs.push(main);
   if (fmt === 'v' && state.ending !== 'none') {
     const end = { kind: 'asset', src: ASSET.ending.v };
@@ -640,7 +770,7 @@ function buildPlan(clip, out) {
     segs.push(end);
   } else {
     main.fadeOut = RULE.fadeOutToIvory;
-    if (classic) segs.push({ kind: 'still', style: 'icon', dur: ICON_CARD_SEC });   // 끝도 아이콘 카드로 깔끔하게 닫음
+    if (classic && !cardOn) segs.push({ kind: 'still', style: 'icon', dur: ICON_CARD_SEC });   // 끝도 아이콘 카드로 깔끔하게 닫음
   }
   return { fmt, W, H, segs, clip, out };
 }
@@ -655,7 +785,8 @@ async function runPlan(plan, { record, onProgress }) {
   const ac = getAudioCtx(); await ac.resume();
   await document.fonts.load('300 60px "Noto Sans KR"', 'TOSOONI 오늘은 토순이 친구' + segs.map((s) => (s.text || '') + (s.caption || '')).join(''));
   await document.fonts.load('400 40px "Noto Sans KR"', '토순이 친구' + segs.map((s) => s.caption || '').join(''));
-  const cornerImg = await frameOverlay(fmt, W, H);
+  await document.fonts.load('500 40px "Noto Sans KR"', segs.map((s) => (s.text || '') + (s.clip ? (s.clip.title || '') : '')).join('') + '토순이 친구').catch(() => {});
+  const cornerImg = state.card && fmt === 'v' ? null : await frameOverlay(fmt, W, H);
 
   // 오디오: 각 소스 → 음량 → 마스터 → 리미터 → 스피커(+녹음)
   const master = ac.createGain();
@@ -722,13 +853,17 @@ async function runPlan(plan, { record, onProgress }) {
       if (s.el.readyState >= 2) drawAsset(ctx, s.el, W, H);
       if (s.role === 'title') drawGreenTitleText(ctx, W, H, fmt, s.text, t);
     } else {
-      if (state.grade && 'filter' in ctx) ctx.filter = 'sepia(0.07) saturate(1.04) brightness(1.01)';
-      if (s.el.readyState >= 2) drawVideo(ctx, s.el, W, H, s.mode);
-      ctx.filter = 'none';
-      if (cornerImg) ctx.drawImage(cornerImg, 0, 0, W, H);
-      const vis = 1 - (s.fadeIn ? 1 - clamp(t / s.fadeIn) : 0);
-      if (state.watermark) drawWatermark(ctx, W, H, fmt, vis);
-      drawCaption(ctx, W, H, fmt, s.caption, t);
+      if (s.card) {
+        drawCard(ctx, W, H, s.clip, s.el, s.caption, s.mode && typeof s.mode === 'object' ? 'crop' : 'main');
+      } else {
+        if (state.grade && 'filter' in ctx) ctx.filter = 'sepia(0.07) saturate(1.04) brightness(1.01)';
+        if (s.el.readyState >= 2) drawVideo(ctx, s.el, W, H, s.mode);
+        ctx.filter = 'none';
+        if (cornerImg) ctx.drawImage(cornerImg, 0, 0, W, H);
+        const vis = 1 - (s.fadeIn ? 1 - clamp(t / s.fadeIn) : 0);
+        if (state.watermark) drawWatermark(ctx, W, H, fmt, vis);
+        drawCaption(ctx, W, H, fmt, s.caption, t);
+      }
       // 아이보리에서 열리고 / 아이보리로 닫힘
       let iv = 0;
       if (s.fadeIn) iv = Math.max(iv, 1 - clamp(t / s.fadeIn));
@@ -835,9 +970,15 @@ async function drawStill() {
   screen.width = W; screen.height = H;
   sctx.fillStyle = RULE.ivory; sctx.fillRect(0, 0, W, H);
   if (!sel || !sel.clip.thumb || !sel.clip.thumb.videoWidth) return;
+  const cardOn = !!state.card && fmt === 'v';
   await document.fonts.load('300 30px "Noto Sans KR"', 'TOSOONI').catch(() => {});
-  const corner = await frameOverlay(fmt, W, H).catch(() => null);
+  if (cardOn) {
+    await document.fonts.load('500 40px "Noto Sans KR"', (sel.clip.title || '') + '토순이 친구').catch(() => {});
+    await document.fonts.load('400 40px "Noto Sans KR"', (sel.clip.caption || '') + '토순이 친구').catch(() => {});
+  }
+  const corner = cardOn ? null : await frameOverlay(fmt, W, H).catch(() => null);
   if (tok !== stillTok || state.running) return;
+  if (cardOn) { drawCard(sctx, W, H, sel.clip, sel.clip.thumb, sel.clip.caption, sel.out.kind); return; }
   const c = sel.clip, vertSrc = c.h > c.w;
   const mode = sel.out.kind === 'crop' ? { cropX: c.cropX } : (vertSrc && fmt === 'h') ? 'contain' : 'cover';
   if (state.grade && 'filter' in sctx) sctx.filter = 'sepia(0.07) saturate(1.04) brightness(1.01)';

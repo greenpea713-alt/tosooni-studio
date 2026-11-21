@@ -37,6 +37,10 @@
       <div class="bubble"><span id="guideText">영상만 올려 주면, 비율은 내가 안 잘리게 맞출게!</span></div>
     </div>
     <div class="presets" id="presetRow" role="group" aria-label="한 번에 설정하는 프리셋">
+      <button class="preset" type="button" data-preset="card" aria-pressed="false">
+        <span class="p-emo" aria-hidden="true">🃏</span>
+        <span class="p-in"><b>카드 쇼츠</b><small>크림 카드 · 프로필+제목</small></span>
+      </button>
       <button class="preset" type="button" data-preset="shorts" aria-pressed="false">
         <span class="p-emo" aria-hidden="true">🐰</span>
         <span class="p-in"><b>세로 쇼츠</b><small>크림 카드 · 1080×1920</small></span>
@@ -70,6 +74,32 @@
 
   <section class="panel">
     <div class="step-head"><span class="num">02</span><h2>스타일</h2></div>
+
+    <div class="field card-field">
+      <label>카드 쇼츠 <small>크림 카드에 프로필·제목·영상·자막을 담아요 (세로 쇼츠)</small></label>
+      <div class="seg" id="cardSeg">
+        <button data-v="off">끄기 · 영상 꽉 차게</button>
+        <button data-v="on">카드로 담기</button>
+      </div>
+      <div class="card-opts" id="cardOpts" hidden>
+        <label class="check"><input type="checkbox" id="cardFrame" checked> 네모 테두리·그림자 박스</label>
+        <div class="card-row">
+          <span class="card-lab">영상 크기</span>
+          <input type="range" id="cardScale" min="42" max="86" step="1" value="56" aria-label="카드 안 영상 크기">
+          <span class="card-val" id="cardScaleVal">56%</span>
+        </div>
+        <div class="card-row">
+          <span class="card-lab">프로필</span>
+          <div class="seg" id="iconSeg">
+            <button data-v="default">토순이</button>
+            <button data-v="none">없음</button>
+          </div>
+          <button class="btn ghost small" id="iconPick" type="button">내 사진으로…</button>
+          <input type="file" id="iconFile" accept="image/*" hidden>
+        </div>
+        <p class="note">미리보기에서 제목·자막 글자를 눌러 그 자리에서 바로 고칠 수 있어요.</p>
+      </div>
+    </div>
 
     <div class="field">
       <label>테마</label>
@@ -126,6 +156,10 @@
       <div class="stage-fx" id="stageFx" aria-hidden="true">
         <div class="stage-glow"></div>
         <div class="cmp" id="cmpWrap" hidden><canvas id="cmpCanvas" width="296" height="296"></canvas><span class="cmp-tag">보정 전</span></div>
+      </div>
+      <div class="stage-edit" id="stageEdit" hidden>
+        <div class="edit-hot" data-edit="title" hidden><span class="edit-txt"></span><span class="edit-pen" aria-hidden="true">✎</span></div>
+        <div class="edit-hot" data-edit="caption" hidden><span class="edit-txt"></span><span class="edit-pen" aria-hidden="true">✎</span></div>
       </div>
     </div>
     <div class="stage-note">미리보기 위에 마우스를 올리면 커서 자리에 <b>보정 전</b> 원본이 동그랗게 비춰 보여요.</div>

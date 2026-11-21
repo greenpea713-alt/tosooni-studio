@@ -25,20 +25,24 @@
 
   // ---------------------------------------------------------------- 1. 프리셋 + 말풍선 가이드
   const PRESETS = {
+    card: {
+      set: { card: true, theme: 'classic', opening: 'none', ending: 'none', watermark: true },
+      say: '카드 쇼츠로 담을게! 프로필·제목·자막이 카드 안에 들어가고, 글자는 미리보기에서 바로 고칠 수 있어.',
+    },
     shorts: {
-      set: { theme: 'classic', opening: 'intro4s', ending: 'shorts', watermark: true },
+      set: { card: false, theme: 'classic', opening: 'intro4s', ending: 'shorts', watermark: true },
       say: '세로 쇼츠는 크림 카드로 맞췄어! 세로 영상은 위아래 안 잘리게 1080×1920으로 담을게.',
     },
     vlog: {
-      set: { theme: 'classic', opening: 'official', ending: 'none', watermark: true },
+      set: { card: false, theme: 'classic', opening: 'official', ending: 'none', watermark: true },
       say: '가로 브이로그는 공식 오프닝으로 천천히 열고, 끝은 담백하게 끊을게.',
     },
     caption: {
-      set: { theme: 'classic', opening: 'none', ending: 'none', watermark: false },
+      set: { card: false, theme: 'classic', opening: 'none', ending: 'none', watermark: false },
       say: '오프닝·엔딩·로고는 빼고, 영상마다 적어 준 제목과 자막만 얹을게!',
     },
     autumn: {
-      set: { theme: 'autumn', opening: 'intro4s', ending: 'shorts', watermark: true },
+      set: { card: false, theme: 'autumn', opening: 'intro4s', ending: 'shorts', watermark: true },
       say: '가을 테마! 크림 종이에 낙엽이 쏟아지며 넘어가. 따뜻한 결로 맞춰 볼까?',
     },
   };
@@ -46,9 +50,10 @@
 
   function activePreset() {
     const theme = segValue('themeSeg'), opening = segValue('openingSeg'), ending = segValue('endingSeg');
-    const wm = $('watermark');
+    const wm = $('watermark'), cardOn = !!state.card;
     for (let i = 0; i < PRESET_KEYS.length; i++) {
       const k = PRESET_KEYS[i], s = PRESETS[k].set;
+      if (cardOn !== !!s.card) continue;
       if (theme !== s.theme || opening !== s.opening || ending !== s.ending) continue;
       if (wm && wm.checked !== s.watermark) continue;
       return k;
@@ -84,6 +89,9 @@
     setSeg('openingSeg', p.set.opening);
     setSeg('endingSeg', p.set.ending);
     setCheckbox('watermark', p.set.watermark);
+    state.card = !!p.set.card;
+    syncCardUI();
+    refresh();
     markPresets();
     say(guideLine());
   }
@@ -111,6 +119,11 @@
     if (/변환하는 중/.test(status)) return '영상 읽는 중이야… 잠깐만 기다려 줘!';
     const n = clipList ? clipList.children.length : 0;
     if (!n) return '영상만 올려 주면, 비율은 내가 안 잘리게 맞출게!';
+    if (state.card) {
+      let sel = null;
+      try { sel = currentSelection(); } catch (err) { sel = null; }
+      if (sel && sel.out && sel.out.fmt !== 'v') return '카드는 세로 쇼츠에만 들어가. 이 영상은 가로라서 꽉 찬 화면으로 만들게.';
+    }
     const key = activePreset();
     if (key) return PRESETS[key].say;
     const m = status.match(/(\d+)\s*편을 만들 준비/);
@@ -223,12 +236,198 @@
   stage.addEventListener('pointerenter', onStageMove, { passive: true });
   stage.addEventListener('pointerleave', hideCmp);
 
+  // ---------------------------------------------------------------- 카드 쇼츠 설정 (크림 카드 · 네모 박스 · 영상 크기 · 프로필)
+  const cardSeg = $('cardSeg'), cardOpts = $('cardOpts'), cardFrameEl = $('cardFrame');
+  const cardScaleEl = $('cardScale'), cardScaleVal = $('cardScaleVal');
+  const iconSeg = $('iconSeg'), iconPick = $('iconPick'), iconFile = $('iconFile');
+
+  function syncCardUI() {
+    const on = !!state.card;
+    if (cardSeg) {
+      cardSeg.querySelectorAll('button').forEach((b) => {
+        const isOn = (b.dataset.v === 'on') === on;
+        b.classList.toggle('on', isOn);
+        b.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+      });
+    }
+    if (cardOpts) cardOpts.hidden = !on;
+    if (cardFrameEl) cardFrameEl.checked = !!state.cardFrame;
+    if (cardScaleEl) cardScaleEl.value = String(Math.round(state.cardScale * 100));
+    if (cardScaleVal) cardScaleVal.textContent = Math.round(state.cardScale * 100) + '%';
+    if (iconSeg) {
+      iconSeg.querySelectorAll('button').forEach((b) => {
+        const isOn = b.dataset.v === state.cardIcon;
+        b.classList.toggle('on', isOn);
+        b.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+      });
+    }
+  }
+
+  function setCard(on) {
+    if (isRunning()) return;
+    state.card = !!on;
+    syncCardUI();
+    refresh();
+    renderEditOverlay();
+    markPresets();
+    say(guideLine());
+  }
+
+  if (cardSeg) cardSeg.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('button');
+    if (b) setCard(b.dataset.v === 'on');
+  });
+  if (cardFrameEl) cardFrameEl.addEventListener('change', () => {
+    if (isRunning()) return;
+    state.cardFrame = cardFrameEl.checked;
+    refresh();
+  });
+  if (cardScaleEl) cardScaleEl.addEventListener('input', () => {
+    if (isRunning()) return;
+    state.cardScale = clamp(+cardScaleEl.value / 100, 0.42, 0.86);
+    if (cardScaleVal) cardScaleVal.textContent = cardScaleEl.value + '%';
+    refresh();
+    renderEditOverlay();
+  });
+  if (iconSeg) iconSeg.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('button');
+    if (!b || isRunning()) return;
+    state.cardIcon = b.dataset.v;
+    syncCardUI();
+    refresh();
+    renderEditOverlay();
+    say(b.dataset.v === 'none' ? '프로필 동그라미를 뺐어. 제목이 위로 올라와.' : '동그란 토순이 프로필로 돌아왔어!');
+  });
+  if (iconPick && iconFile) {
+    iconPick.addEventListener('click', () => { if (!isRunning()) iconFile.click(); });
+    iconFile.addEventListener('change', () => {
+      const f = iconFile.files && iconFile.files[0];
+      iconFile.value = '';
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { say('사진 파일(png·jpg)만 넣을 수 있어!'); return; }
+      const fr = new FileReader();
+      fr.onload = () => {
+        state.cardIcon = String(fr.result);
+        syncCardUI();
+        refresh();
+        renderEditOverlay();
+        say('프로필 사진을 바꿨어! 카드 위에 동그랗게 들어갔어.');
+      };
+      fr.readAsDataURL(f);
+    });
+  }
+
+  // ---------------------------------------------------------------- 미리보기에서 제목·자막 바로 고치기
+  const stageEdit = $('stageEdit');
+  const editEls = stageEdit ? Array.from(stageEdit.querySelectorAll('.edit-hot')) : [];
+  let editing = null;
+
+  function cardTarget() {
+    if (!stageEdit || !state.card || isRunning()) return null;
+    let sel = null;
+    try { sel = currentSelection(); } catch (err) { sel = null; }
+    if (!sel || !sel.out || sel.out.fmt !== 'v') return null;
+    if (!sel.clip || !sel.clip.thumb || !sel.clip.thumb.videoWidth) return null;
+    return sel;
+  }
+
+  function layoutBoxes(sel) {
+    const W = screenCv.width, H = screenCv.height;
+    const L = cardLayout(W, H, sel.clip, sel.out.kind);
+    const r = screenCv.getBoundingClientRect();
+    const k = r.width / W;
+    const mk = (b) => ({
+      left: ((W - b.maxW) / 2) * k,
+      width: b.maxW * k,
+      top: (b.y - b.px * 0.35) * k,
+      height: b.px * 1.36 * k,
+      px: b.px * k,
+    });
+    return { title: mk(L.title), caption: mk(L.caption) };
+  }
+
+  function renderEditOverlay() {
+    if (!stageEdit) return;
+    const sel = cardTarget();
+    if (!sel) { stageEdit.hidden = true; return; }
+    stageEdit.hidden = false;
+    const boxes = layoutBoxes(sel);
+    editEls.forEach((el) => {
+      const kind = el.dataset.edit;
+      const b = boxes[kind];
+      if (!b) { el.hidden = true; return; }
+      const text = String((kind === 'title' ? sel.clip.title : sel.clip.caption) || '').trim();
+      el.hidden = false;
+      el.style.left = b.left.toFixed(1) + 'px';
+      el.style.top = b.top.toFixed(1) + 'px';
+      el.style.width = b.width.toFixed(1) + 'px';
+      el.style.height = b.height.toFixed(1) + 'px';
+      el.classList.toggle('empty', !text);
+      if (editing && editing.el === el) return;
+      const t = el.querySelector('.edit-txt');
+      if (t) {
+        t.textContent = text || (kind === 'title' ? '제목을 눌러 적기' : '자막을 눌러 적기');
+        t.style.fontSize = Math.max(9, Math.min(22, b.px * 0.9)).toFixed(1) + 'px';
+      }
+    });
+  }
+
+  function startEdit(el) {
+    if (editing) return;
+    const sel = cardTarget();
+    if (!sel) return;
+    const kind = el.dataset.edit;
+    const cur = String((kind === 'title' ? sel.clip.title : sel.clip.caption) || '');
+    const t = el.querySelector('.edit-txt');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'edit-input';
+    input.value = cur;
+    input.maxLength = kind === 'title' ? 24 : 40;
+    input.setAttribute('aria-label', kind === 'title' ? '카드 제목 고치기' : '카드 자막 고치기');
+    input.style.fontSize = t ? t.style.fontSize : '14px';
+    if (t) t.style.display = 'none';
+    el.append(input);
+    editing = { kind, el, input, clip: sel.clip };
+    input.focus();
+    try { input.select(); } catch (e) {}
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); commitEdit(true); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); commitEdit(false); }
+    });
+    input.addEventListener('blur', () => { if (editing) commitEdit(true); });
+  }
+
+  function commitEdit(save) {
+    if (!editing) return;
+    const { kind, clip, input, el } = editing;
+    const v = String(input.value || '').slice(0, kind === 'title' ? 24 : 40);
+    editing = null;
+    input.remove();
+    const t = el.querySelector('.edit-txt');
+    if (t) t.style.display = '';
+    if (save) {
+      if (kind === 'title') clip.title = v; else clip.caption = v;
+      renderClipList();
+      refresh();
+      say(kind === 'title' ? '제목을 고쳤어! 카드에도 그대로 들어갔어.' : '자막을 고쳤어! 이제 내보내기에도 그대로 들어가.');
+    }
+    renderEditOverlay();
+  }
+
+  editEls.forEach((el) => {
+    el.addEventListener('click', (e) => { e.preventDefault(); startEdit(el); });
+  });
+
   // ---------------------------------------------------------------- 상태 따라가기 (0.4초마다 화면만 읽음)
   markPresets();
+  syncCardUI();
   say(guideLine());
+  renderEditOverlay();
   setInterval(() => {
     markPresets();
     say(guideLine());
+    renderEditOverlay();
     if (isRunning()) hideCmp();
   }, 420);
 })();
