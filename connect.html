@@ -25,7 +25,7 @@
 <main>
   <div class="mark">TOSOONI</div><div class="heart">♥</div>
   <h1 id="h">유튜브 연결</h1>
-  <p id="p">구글 계정으로 로그인하면 연결 코드가 나와요.<br>그 코드를 복사해서 Claude에게 붙여 주세요.<br>코드는 1시간 뒤 저절로 사라지고, 영상 올리기에만 쓰여요.</p>
+  <p id="p">구글 계정으로 로그인하면 연결 코드가 나와요.<br>그 코드를 복사해서 Claude에게 붙여 주세요.<br>코드는 1시간 뒤 저절로 사라지고, 영상 올리기와 공개 범위 바꾸기에만 쓰여요.</p>
   <textarea id="code" readonly></textarea>
   <button id="go">구글로 로그인</button>
   <div id="msg"></div>
@@ -46,7 +46,7 @@
     if (!window.google || !google.accounts) { msg.textContent = '잠시 후 다시 눌러 주세요.'; return; }
     google.accounts.oauth2.initTokenClient({
       client_id: window.TOSOONI_CONFIG.googleClientId,
-      scope: 'https://www.googleapis.com/auth/youtube.upload',
+      scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube',
       callback: (r) => {
         if (r.error) { msg.textContent = '로그인이 취소됐어요. 다시 눌러 주세요.'; return; }
         token = r.access_token;
