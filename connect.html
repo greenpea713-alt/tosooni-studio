@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>유튜브 연결</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#F7F3EC; --ink:#3A3836; --sub:#8C8780; --gold:#B89B6A; --line:#E4DDD2; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); color:var(--ink); font-family:'Noto Sans KR',system-ui,sans-serif; font-weight:300; padding:24px 16px; }
+  main { width:100%; max-width:360px; text-align:center; }
+  .mark { letter-spacing:.42em; font-size:13px; font-weight:400; margin-bottom:6px; }
+  .heart { color:#E7B4B8; font-size:10px; }
+  h1 { font-size:20px; font-weight:400; margin:28px 0 10px; }
+  p { color:var(--sub); font-size:14px; line-height:1.7; margin:0 0 28px; }
+  button { width:100%; border:0; border-radius:14px; padding:16px; font:500 16px 'Noto Sans KR',sans-serif; background:var(--ink); color:#fff; }
+  button.ghost { background:transparent; color:var(--ink); border:1px solid var(--line); margin-top:10px; }
+  #code { display:none; width:100%; height:92px; margin:0 0 12px; padding:12px; border:1px solid var(--line); border-radius:12px; background:#fff; font:12px ui-monospace,monospace; color:var(--sub); resize:none; word-break:break-all; }
+  #msg { margin-top:16px; font-size:13px; color:var(--gold); min-height:20px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="mark">TOSOONI</div><div class="heart">♥</div>
+  <h1 id="h">유튜브 연결</h1>
+  <p id="p">구글 계정으로 로그인하면 연결 코드가 나와요.<br>그 코드를 복사해서 Claude에게 붙여 주세요.<br>코드는 1시간 뒤 저절로 사라지고, 영상 올리기에만 쓰여요.</p>
+  <textarea id="code" readonly></textarea>
+  <button id="go">구글로 로그인</button>
+  <div id="msg"></div>
+</main>
+<script src="config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+  const go = document.getElementById('go'), code = document.getElementById('code'), msg = document.getElementById('msg');
+  let token = '';
+  go.onclick = () => {
+    if (token) {
+      code.select();
+      (navigator.clipboard ? navigator.clipboard.writeText(token) : Promise.reject()).then(
+        () => { msg.textContent = '복사했어요. Claude에게 붙여 주세요.'; },
+        () => { document.execCommand('copy'); msg.textContent = '복사했어요. Claude에게 붙여 주세요.'; });
+      return;
+    }
+    if (!window.google || !google.accounts) { msg.textContent = '잠시 후 다시 눌러 주세요.'; return; }
+    google.accounts.oauth2.initTokenClient({
+      client_id: window.TOSOONI_CONFIG.googleClientId,
+      scope: 'https://www.googleapis.com/auth/youtube.upload',
+      callback: (r) => {
+        if (r.error) { msg.textContent = '로그인이 취소됐어요. 다시 눌러 주세요.'; return; }
+        token = r.access_token;
+        code.value = token; code.style.display = 'block';
+        document.getElementById('h').textContent = '연결 코드';
+        document.getElementById('p').innerHTML = '아래 버튼으로 복사해서<br>Claude에게 그대로 붙여 주세요.';
+        go.textContent = '코드 복사하기';
+        msg.textContent = '';
+      },
+      error_callback: () => { msg.textContent = '로그인 창이 닫혔어요. 팝업 차단을 꺼 주세요.'; },
+    }).requestAccessToken();
+  };
+</script>
+</body>
+</html>
